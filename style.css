@@ -1,45 +1,57 @@
-@import url('https://fonts.googleapis.com/css2?family=Cinzel:wght@400;700&family=Lora:ital@0;1&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Cinzel:wght@400;700&family=Lora:ital,wght@0,400;0,600;1,400&display=swap');
+
+:root {
+    --primary-color: #ff8c00;
+    --background-color: #0d0d0d;
+    --surface-color: #1a1a1a;
+    --text-color: #c5c5c5;
+    --border-color: #4a2a00;
+}
 
 body {
     font-family: 'Lora', serif;
-    background-color: #0d0d0d;
-    color: #c5c5c5;
+    background-color: var(--background-color);
+    color: var(--text-color);
     margin: 0;
     padding: 15px;
     display: flex;
     justify-content: center;
     align-items: center;
     min-height: 100vh;
+    box-sizing: border-box;
 }
 
 #game-container {
-    width: 900px;
-    max-width: 98%;
-    border: 1px solid #4a2a00;
-    background-color: #1a1a1a;
-    box-shadow: 0 0 25px rgba(255, 140, 0, 0.15);
+    width: 100%;
+    max-width: 1200px;
+    border: 1px solid var(--border-color);
+    background-color: var(--surface-color);
+    box-shadow: 0 0 25px rgba(0, 0, 0, 0.5);
     border-radius: 8px;
     overflow: hidden;
+    display: flex;
+    flex-direction: column;
 }
 
 #header {
     display: flex;
+    flex-wrap: wrap;
     justify-content: space-between;
     align-items: center;
     padding: 10px 20px;
     background-color: #111;
-    border-bottom: 2px solid #4a2a00;
+    border-bottom: 2px solid var(--border-color);
 }
 
 #game-title {
     font-family: 'Cinzel', serif;
-    color: #ff8c00;
-    margin: 0;
+    color: var(--primary-color);
+    margin: 5px 0;
     font-size: 24px;
 }
 
 #nav-menu button {
-    margin-left: 10px;
+    margin: 5px 0 5px 10px;
     background-color: #333;
     color: #ddd;
     border: 1px solid #555;
@@ -49,13 +61,20 @@ body {
     transition: background-color 0.3s, color 0.3s;
 }
 
-#nav-menu button:hover {
-    background-color: #ff8c00;
+#nav-menu button:hover, #hint-btn:hover {
+    background-color: var(--primary-color);
     color: #111;
 }
 
-#main-content {
+#hint-btn {
+    background-color: #384238;
+    color: #aae0aa;
+    border-color: #526b52;
+}
+
+#main-interface {
     display: flex;
+    flex-direction: row;
 }
 
 #story-panel {
@@ -67,25 +86,26 @@ body {
     font-family: 'Cinzel', serif;
     font-size: 22px;
     color: #ffae42;
-    margin-bottom: 15px;
+    margin: 0;
     border-bottom: 1px solid #333;
     padding-bottom: 10px;
 }
 
-#story-text {
+#story-text, #feedback-text {
     line-height: 1.7;
-    margin-bottom: 20px;
-    min-height: 180px;
     font-size: 16px;
+    margin-top: 20px;
 }
 
-#story-text p {
-    margin: 0 0 10px 0;
-}
-
-.action-feedback {
+#feedback-text {
     color: #ffae42;
     font-style: italic;
+    border-left: 3px solid var(--border-color);
+    padding-left: 15px;
+}
+
+#choices-buttons {
+    margin-top: 20px;
 }
 
 #choices-buttons button {
@@ -96,7 +116,7 @@ body {
     font-size: 16px;
     cursor: pointer;
     background-color: #2c2c2c;
-    color: #c5c5c5;
+    color: var(--text-color);
     border: 1px solid #444;
     border-radius: 5px;
     transition: background-color 0.3s, border-color 0.3s;
@@ -105,22 +125,24 @@ body {
 
 #choices-buttons button:hover {
     background-color: #3a3a3a;
-    border-color: #ff8c00;
+    border-color: var(--primary-color);
 }
 
-#right-panel {
-    width: 250px;
+#side-panel {
+    width: 280px;
+    flex-shrink: 0;
     background-color: #111;
     padding: 20px;
-    border-left: 2px solid #4a2a00;
+    border-left: 2px solid var(--border-color);
 }
 
-#right-panel h2 {
+#side-panel h3 {
     font-family: 'Cinzel', serif;
-    color: #ff8c00;
+    color: var(--primary-color);
     border-bottom: 1px solid #444;
     padding-bottom: 10px;
     margin-top: 0;
+    margin-bottom: 15px;
 }
 
 #health-container {
@@ -144,11 +166,6 @@ body {
     transition: width 0.5s ease-in-out;
 }
 
-#health-text {
-    font-weight: bold;
-    font-size: 14px;
-}
-
 #inventory-list {
     list-style: none;
     padding: 0;
@@ -167,56 +184,26 @@ body {
     background-color: #2a2a2a;
 }
 
-/* Item Modal */
+/* Modal Styles */
 .hidden { display: none !important; }
+#item-modal { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background-color: rgba(0, 0, 0, 0.7); display: flex; justify-content: center; align-items: center; z-index: 100; padding: 15px; box-sizing: border-box; }
+#item-modal-content { background-color: var(--surface-color); padding: 25px; border: 1px solid var(--border-color); border-radius: 8px; width: 100%; max-width: 400px; text-align: center; box-shadow: 0 0 20px rgba(0,0,0,0.5); }
+#item-modal-title { font-family: 'Cinzel', serif; color: var(--primary-color); margin-top: 0; }
+#item-modal-description { font-style: italic; color: #aaa; margin-bottom: 20px; }
+#item-modal-buttons button { margin: 5px; padding: 10px 20px; cursor: pointer; border-radius: 4px; border: 1px solid #555; background-color: #333; color: #ddd; transition: background-color 0.3s; }
+#item-modal-buttons button:hover { background-color: var(--primary-color); color: #111; }
 
-#item-modal {
-    position: fixed;
-    top: 0;
-    left: 0;
-    width: 100%;
-    height: 100%;
-    background-color: rgba(0, 0, 0, 0.7);
-    display: flex;
-    justify-content: center;
-    align-items: center;
-    z-index: 100;
-}
-
-#item-modal-content {
-    background-color: #1a1a1a;
-    padding: 25px;
-    border: 1px solid #4a2a00;
-    border-radius: 8px;
-    width: 400px;
-    text-align: center;
-    box-shadow: 0 0 20px rgba(0,0,0,0.5);
-}
-
-#item-modal-title {
-    font-family: 'Cinzel', serif;
-    color: #ff8c00;
-    margin-top: 0;
-}
-
-#item-modal-description {
-    font-style: italic;
-    color: #aaa;
-    margin-bottom: 20px;
-}
-
-#item-modal-buttons button {
-    margin: 0 10px;
-    padding: 10px 20px;
-    cursor: pointer;
-    border-radius: 4px;
-    border: 1px solid #555;
-    background-color: #333;
-    color: #ddd;
-    transition: background-color 0.3s;
-}
-
-#item-modal-buttons button:hover {
-    background-color: #ff8c00;
-    color: #111;
+/* Mobile Responsiveness */
+@media (max-width: 800px) {
+    #main-interface {
+        flex-direction: column;
+    }
+    #side-panel {
+        width: auto;
+        border-left: none;
+        border-top: 2px solid var(--border-color);
+    }
+    #game-title {
+        font-size: 20px;
+    }
 }
