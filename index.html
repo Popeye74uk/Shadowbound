@@ -1,0 +1,37 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>The Forgotten Dungeon</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div id="game-container">
+        <div id="header">
+            <div id="player-stats">
+                <span>Health:</span>
+                <div id="health-bar-container">
+                    <div id="health-bar"></div>
+                </div>
+                <span id="health-value">100/100</span>
+            </div>
+            <div id="nav-menu">
+                <button id="save-button">Save Game</button>
+                <button id="load-button">Load Game</button>
+                <button id="restart-button">Restart Game</button>
+            </div>
+        </div>
+        <div id="main-content">
+            <div id="story-text"></div>
+            <div id="choices-buttons"></div>
+        </div>
+        <div id="inventory-panel">
+            <h2>Inventory</h2>
+            <ul id="inventory-list"></ul>
+        </div>
+        <div id="action-log"></div>
+    </div>
+    <script src="game.js"></script>
+</body>
+</html>
