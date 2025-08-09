@@ -5,33 +5,54 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>The Forgotten Dungeon</title>
     <link rel="stylesheet" href="style.css">
-</head>
-<body>
+</head><body>
     <div id="game-container">
         <div id="header">
-            <div id="player-stats">
-                <span>Health:</span>
-                <div id="health-bar-container">
-                    <div id="health-bar"></div>
-                </div>
-                <span id="health-value">100/100</span>
-            </div>
+            <h1 id="game-title">The Forgotten Dungeon</h1>
             <div id="nav-menu">
-                <button id="save-button">Save Game</button>
-                <button id="load-button">Load Game</button>
-                <button id="restart-button">Restart Game</button>
+                <button id="restart-btn" title="Restart the game">Restart</button>
+                <button id="save-btn" title="Save your progress">Save</button>
+                <button id="load-btn" title="Load your last save">Load</button>
             </div>
         </div>
+
         <div id="main-content">
-            <div id="story-text"></div>
-            <div id="choices-buttons"></div>
+            <div id="story-panel">
+                <div id="room-title"></div>
+                <div id="story-text"></div>
+                <div id="choices-buttons"></div>
+            </div>
+
+            <div id="right-panel">
+                <div id="player-stats">
+                    <h2>Player Stats</h2>
+                    <div id="health-container">
+                        <span>Health:</span>
+                        <div id="health-bar-container">
+                            <div id="health-bar"></div>
+                        </div>
+                        <span id="health-text">100/100</span>
+                    </div>
+                </div>
+                <div id="inventory-panel">
+                    <h2>Inventory</h2>
+                    <ul id="inventory-list"><li>Your inventory is empty.</li></ul>
+                </div>
+            </div>
         </div>
-        <div id="inventory-panel">
-            <h2>Inventory</h2>
-            <ul id="inventory-list"></ul>
+
+        <div id="item-modal" class="hidden">
+            <div id="item-modal-content">
+                <h3 id="item-modal-title"></h3>
+                <p id="item-modal-description"></p>
+                <div id="item-modal-buttons">
+                    <button id="item-use-btn">Use</button>
+                    <button id="item-drop-btn">Drop</button>
+                    <button id="item-modal-close-btn">Close</button>
+                </div>
+            </div>
         </div>
-        <div id="action-log"></div>
     </div>
-    <script src="game.js"></script>
+    <script src="script.js"></script>
 </body>
 </html>
