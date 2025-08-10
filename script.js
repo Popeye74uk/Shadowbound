@@ -1,5 +1,5 @@
 document.addEventListener('DOMContentLoaded', () => {
-    // UI Elements
+    // --- UI ELEMENTS ---
     const storyTextElement = document.getElementById('story-text');
     const echoHintElement = document.getElementById('echo-hint');
     const choicesButtonsElement = document.getElementById('choices-buttons');
@@ -8,310 +8,265 @@ document.addEventListener('DOMContentLoaded', () => {
     const inventoryListElement = document.getElementById('inventory-list');
     const actionLogElement = document.getElementById('action-log');
 
-    // Game State Variables
-    let player;
-    let rooms;
-    let currentRoomId;
-    let currentEnemy;
-    let echoTimer;
+    // --- MASTER GAME DATA (The unchanging blueprint) ---
+    const masterRooms = {
+        start: {
+            description: "You stand at the entrance to a long-forgotten dungeon. A heavy wooden door looms in front of you. The air is thick with dust. A faint, cool breeze emanates from a crack in the wall to your left.",
+            choices: [
+                { text: "Examine the heavy door", action: 'examine', target: 'door' },
+                { text: "Examine the crack in the wall", action: 'examine', target: 'crack' },
+                { text: "Look around the room", action: 'examine', target: 'room' }
+            ],
+            onExamine: {
+                door: "The door is made of heavy oak and is firmly barred from the other side. There's no way through here.",
+                crack: "You find a hidden passage behind a loose section of the wall! It's a tight squeeze.",
+                room: "You scan the dusty room. Against the wall rests a single, flickering torch. It might be useful."
+            },
+            items: [{ id: 'torch', name: 'Flickering Torch', attack: 5 }],
+            state: { revealedPassage: false, itemTaken: false },
+            echo: "Perhaps the door is not the only way forward..."
+        },
+        goblinCorridor: {
+            description: "You squeeze through the passage into a narrow corridor. A foul-smelling goblin holding a crude club is startled by your arrival!",
+            enemy: { name: "Goblin", health: 30, maxHealth: 30, attack: 10, loot: { id: 'dragonKey', name: 'Dragon Key' } },
+            choices: [ { text: "Flee back to the entrance", action: "move", target: "start" } ],
+            state: { enemyDefeated: false },
+            echo: "Combat is dangerous. Do you have a weapon?"
+        },
+        corridorClear: {
+            description: "The corridor is quiet now, the goblin's body a grim reminder of your victory. The path continues forward into darkness.",
+            choices: [
+                { text: "Go forward to a chamber", action: "move", target: "puzzleChamber" },
+                { text: "Return to the entrance hall", action: "move", target: "start" }
+            ],
+            echo: "The key you found must fit a lock somewhere."
+        },
+        puzzleChamber: {
+            description: "The corridor opens into a square chamber. A large stone door blocks your path. Intricate symbols are carved into it, with a single, dragon-shaped slot in the center. A faint whistling sound comes from a pile of rubble in the corner.",
+            choices: [
+                { text: "Examine the stone door", action: "examine", target: "puzzleDoor" },
+                { text: "Examine the rubble", action: "examine", target: "rubble" },
+                { text: "Go back to the corridor", action: "move", target: "corridorClear" }
+            ],
+            onExamine: {
+                puzzleDoor: "The dragon-shaped slot seems to be waiting for a key.",
+                rubble: "Hidden in the rubble, you find a small vial containing a shimmering red liquid."
+            },
+            items: [{ id: 'strengthPotion', name: 'Potion of Strength', attackBonus: 10 }],
+            state: { itemTaken: false },
+            echo: "A key with a unique shape might be needed for the door."
+        },
+        observatory: {
+            description: "This room was once a grand observatory, but the ceiling has collapsed, leaving a massive hole open to the sky. Starlight filters down, illuminating a pedestal in the center of the room.",
+            choices: [{ text: "Approach the pedestal", action: "examine", target: "pedestal" }],
+            onExamine: { pedestal: "You approach the pedestal and see the source of the light: a magnificent, Glowing Gem that hums with energy." },
+            items: [{ id: 'glowingGem', name: 'Glowing Gem' }],
+            state: { itemTaken: false },
+            echo: "Such a beautiful object must have a purpose."
+        },
+        archives: {
+            description: "You've discovered a hidden library! Dusty tomes line the walls. A large, locked book sits on a lectern. It has a circular indentation on its cover.",
+            choices: [{ text: "Examine the locked book", action: "examine", target: "book" }],
+            onExamine: { book: "The heavy book is sealed by a lock with a circular indentation. It feels like something might fit there." },
+            echo: "That indentation on the book looks familiar..."
+        },
+        secretEnd: {
+            description: "The gem fits perfectly. The book opens, revealing the dungeon's history. The final page reveals a hidden exit behind a bookshelf. You have uncovered the truth!",
+            choices: [{ text: "Escape with the knowledge", action: "win" }]
+        },
+        gameOver: {
+            description: "You have been defeated. The darkness of the dungeon consumes you.",
+            choices: [{ text: "Try Again", action: "restart" }]
+        }
+    };
 
-    // --- GAME DATA FACTORY ---
-    function createInitialRoomsState() {
-        return {
-            start: {
-                description: "You stand at the entrance to a long-forgotten dungeon. A heavy wooden door looms in front of you. The air is thick with dust. A faint, cool breeze emanates from a crack in the wall to your left.",
-                choices: [
-                    { text: "Examine the heavy door", action: 'examine', target: 'door' },
-                    { text: "Examine the crack in the wall", action: 'examine', target: 'crack' },
-                    { text: "Look around the entrance hall", action: 'examine', target: 'room' }
-                ],
-                examinations: {
-                    door: "The door is made of heavy oak and is firmly barred from the other side. There's no way through here.",
-                    crack: "You find a hidden passage behind a loose section of the wall! It's a tight squeeze.",
-                    room: "You scan the dusty room. Against the wall rests a single, flickering torch. It might be useful."
-                },
-                items: [{ id: 'torch', name: 'Flickering Torch' }],
-                state: { revealedPassage: false, tookTorch: false },
-                echo: "Perhaps the door is not the only way forward..."
-            },
-            goblinCorridor: {
-                description: "You squeeze through the passage into a narrow corridor. A foul-smelling goblin holding a crude club is startled by your arrival!",
-                enemy: { name: "Goblin", health: 30, maxHealth: 30, attack: 10, loot: { id: 'dragonKey', name: 'Dragon Key' } },
-                choices: [
-                    { text: "Attack the Goblin", action: "attack" },
-                    { text: "Flee back to the entrance", action: "flee", target: "start" }
-                ],
-                state: { enemyDefeated: false },
-                echo: "Combat is dangerous. Do you have a weapon?"
-            },
-            corridorClear: {
-                description: "The corridor is quiet now, the goblin's body a grim reminder of your victory. The path continues forward into darkness.",
-                choices: [
-                    { text: "Go forward to a chamber", action: "move", target: "puzzleChamber" },
-                    { text: "Return to the entrance hall", action: "move", target: "start" }
-                ],
-                echo: "The key you found must fit a lock somewhere."
-            },
-            puzzleChamber: {
-                description: "The corridor opens into a square chamber. A large stone door blocks your path. Intricate symbols are carved into it, with a single, dragon-shaped slot in the center. A faint whistling sound comes from a pile of rubble in the corner.",
-                choices: [
-                    { text: "Examine the stone door", action: "examine", target: "puzzleDoor" },
-                    { text: "Examine the rubble", action: "examine", target: "rubble" },
-                    { text: "Go back to the corridor", action: "move", target: "corridorClear" }
-                ],
-                examinations: {
-                    puzzleDoor: "The dragon-shaped slot seems to be waiting for a key.",
-                    rubble: "Hidden in the rubble, you find a small vial containing a shimmering red liquid."
-                },
-                items: [{ id: 'strengthPotion', name: 'Potion of Strength', attackBonus: 10 }],
-                state: { tookPotion: false },
-                echo: "A key with a unique shape might be needed for the door."
-            },
-            observatory: {
-                description: "This room was once a grand observatory, but the ceiling has collapsed, leaving a massive hole open to the sky. Starlight filters down, illuminating a pedestal in the center of the room.",
-                choices: [{ text: "Approach the pedestal", action: "examine", target: "pedestal" }],
-                examinations: { pedestal: "You approach the pedestal and see the source of the light: a magnificent, Glowing Gem that hums with energy." },
-                items: [{ id: 'glowingGem', name: 'Glowing Gem' }],
-                state: { tookGem: false },
-                echo: "Such a beautiful object must have a purpose."
-            },
-            archives: {
-                description: "You've discovered a hidden library! Dusty tomes line the walls. A large, locked book sits on a lectern. It has a circular indentation on its cover.",
-                choices: [{ text: "Examine the locked book", action: "examine", target: "book" }],
-                examinations: { book: "The heavy book is sealed by a lock with a circular indentation. It feels like something might fit there." },
-                echo: "That indentation on the book looks familiar..."
-            },
-            secretEnd: {
-                description: "The gem fits perfectly. The book opens, revealing the dungeon's history. The final page reveals a hidden exit behind a bookshelf. You have uncovered the truth!",
-                choices: [{ text: "Escape with the knowledge", action: "winSecret" }]
-            },
-            finalExit: {
-                description: "You found the main exit and escaped the dungeon with your life and some treasure. Congratulations!",
-                choices: [{ text: "Play Again", action: "restart" }]
-            },
-            gameOver: {
-                description: "You have been defeated. The darkness of the dungeon consumes you.",
-                choices: [{ text: "Try Again", action: "restart" }]
-            }
-        };
-    }
+    // --- GAME STATE (The dynamic, saveable progress) ---
+    let gameState = {};
+    let echoTimer = null;
 
-    // --- CORE GAME LOOP ---
-
+    // --- GAME INITIALIZATION ---
     function startGame() {
-        player = {
-            health: 100,
-            maxHealth: 100,
-            inventory: [],
-            attackBonus: 0,
+        // Deep copy master data to create a fresh session state
+        gameState = {
+            player: { health: 100, maxHealth: 100, inventory: [], baseAttack: 2 },
+            currentRoomId: 'start',
+            rooms: JSON.parse(JSON.stringify(masterRooms)) // Crucial for restartable, clean state
         };
-        rooms = createInitialRoomsState();
-        currentRoomId = 'start';
-        currentEnemy = null;
         updateUI();
     }
 
+    // --- CORE UI RENDERER ---
     function updateUI() {
         resetEchoTimer();
-        const room = rooms[currentRoomId];
-        storyTextElement.innerText = room.description;
-        choicesButtonsElement.innerHTML = '';
-        if (actionLogElement.className !== 'critical-warning') {
-            logAction(''); // Clear log unless it's a critical warning
+        clearEchoHint();
+
+        const room = gameState.rooms[gameState.currentRoomId];
+
+        // --- Safety Check: Ensure the room exists ---
+        if (!room) {
+            storyTextElement.innerText = "A critical error has occurred. The world has vanished. Please restart the game.";
+            console.error(`Error: Room with ID "${gameState.currentRoomId}" not found.`);
+            choicesButtonsElement.innerHTML = '';
+            choicesButtonsElement.appendChild(createButton("Restart", startGame));
+            return;
         }
 
-        // --- RENDER CHOICES ---
-        const isCritical = player.health > 0 && player.health / player.maxHealth <= 0.2;
+        // --- Render Room and Choices ---
+        storyTextElement.innerText = room.description;
+        choicesButtonsElement.innerHTML = '';
+        actionLogElement.className = '';
+        actionLogElement.innerText = '';
 
+        // --- Low Health Warning ---
+        const isCritical = gameState.player.health > 0 && gameState.player.health / gameState.player.maxHealth <= 0.2;
         if (isCritical) {
             logAction("CRITICAL HEALTH! Use a potion before it's too late!", true);
-            const healingPotions = player.inventory.filter(item => item.heal);
+            const healingPotions = gameState.player.inventory.filter(item => item.heal);
             if (healingPotions.length > 0) {
                 healingPotions.forEach(potion => {
                     choicesButtonsElement.appendChild(createButton(`Use ${potion.name}`, () => useItem(potion.id)));
                 });
             }
-            choicesButtonsElement.appendChild(createButton("Do nothing", updateUI)); // Button to ignore warning
-        } else {
-             if (room.choices) {
-                room.choices.forEach(choice => {
-                    choicesButtonsElement.appendChild(createButton(choice.text, () => handleAction(choice)));
-                });
-            }
+        }
+        
+        // --- Combat UI ---
+        if (room.enemy && !room.state.enemyDefeated) {
+             choicesButtonsElement.appendChild(createButton("Attack " + room.enemy.name, () => handleAction({ action: 'attack' })));
         }
 
-        // --- UPDATE STATS AND INVENTORY ---
-        healthBarElement.style.width = `${(player.health / player.maxHealth) * 100}%`;
-        healthValueElement.innerText = `${player.health}/${player.maxHealth}`;
+        // --- Standard Choices ---
+        if (room.choices) {
+            room.choices.forEach(choice => {
+                choicesButtonsElement.appendChild(createButton(choice.text, () => handleAction(choice)));
+            });
+        }
+        
+        // --- Update Stats and Inventory ---
+        healthBarElement.style.width = `${(gameState.player.health / gameState.player.maxHealth) * 100}%`;
+        healthValueElement.innerText = `${gameState.player.health}/${gameState.player.maxHealth}`;
         updateInventory();
     }
     
+    // --- ACTION HANDLER ---
     function handleAction(choice) {
-        clearEchoHint();
-        logAction(''); // Clear log on new action
         const { action, target } = choice;
-
+        const room = gameState.rooms[gameState.currentRoomId];
+        
+        // --- Process Action ---
         switch (action) {
             case 'move':
-                currentRoomId = target;
-                break;
-            case 'flee':
-                currentEnemy = null;
-                currentRoomId = target;
-                logAction("You flee back to safety.");
+                gameState.currentRoomId = target;
                 break;
             case 'examine':
-                handleExamine(target);
+                logAction(room.onExamine[target]);
+                // Add contextual choices post-examination
+                if (target === 'crack' && !room.state.revealedPassage) {
+                    room.choices.push({ text: "Squeeze through the passage", action: 'move', target: 'goblinCorridor' });
+                    room.state.revealedPassage = true;
+                }
+                if (target === 'room' && !room.state.itemTaken) {
+                    room.choices.push({ text: `Take the ${room.items[0].name}`, action: 'pickup', target: room.items[0].id });
+                }
+                if (target === 'rubble' && !room.state.itemTaken) {
+                    room.choices.push({ text: `Take the ${room.items[0].name}`, action: 'pickup', target: room.items[0].id });
+                }
+                if (target === 'pedestal' && !room.state.itemTaken) {
+                    room.choices.push({ text: `Take the ${room.items[0].name}`, action: 'pickup', target: room.items[0].id });
+                }
+                // Remove the examine choice after it's used
+                room.choices = room.choices.filter(c => c.target !== target);
                 break;
             case 'pickup':
-                handlePickup(target);
+                const itemData = room.items.find(item => item.id === target);
+                gameState.player.inventory.push(itemData);
+                logAction(`You take the ${itemData.name}.`);
+                room.state.itemTaken = true;
+                room.choices = room.choices.filter(c => c.action !== 'pickup');
                 break;
             case 'attack':
                 handleCombat();
                 break;
-            case 'winSecret':
+            case 'win':
+                gameState.currentRoomId = 'secretEnd';
+                break;
             case 'restart':
-                // Use a confirm dialog for restarting
-                if (action === 'restart' && !confirm("Are you sure you want to restart?")) return;
                 startGame();
-                return;
-        }
-
-        // Re-evaluate enemy status after an action
-        const room = rooms[currentRoomId];
-        if (room && room.enemy && !room.state.enemyDefeated) {
-            currentEnemy = { ...room.enemy };
-        } else {
-            currentEnemy = null;
-        }
-
-        // Avoid double-rendering for combat hits
-        if (action !== 'attack' && currentRoomId !== 'gameOver') {
-            updateUI();
-        }
-    }
-    
-    // --- ACTION HANDLERS ---
-    
-    function handleExamine(target) {
-        const room = rooms[currentRoomId];
-        logAction(room.examinations[target]);
-
-        // Create contextual choices from examinations
-        if (target === 'crack' && !room.state.revealedPassage) {
-            room.choices.push({ text: "Squeeze through the passage", action: 'move', target: 'goblinCorridor' });
-            room.state.revealedPassage = true;
-        } else if (target === 'room' && !room.state.tookTorch) {
-            room.choices.push({ text: `Take the ${room.items[0].name}`, action: 'pickup', target: 'torch' });
-        } else if (target === 'rubble' && !room.state.tookPotion) {
-            room.choices.push({ text: `Take the ${room.items[0].name}`, action: 'pickup', target: 'strengthPotion' });
-        } else if (target === 'pedestal' && !room.state.tookGem) {
-             room.choices.push({ text: `Take the ${room.items[0].name}`, action: 'pickup', target: 'glowingGem' });
+                return; // Exit to prevent double render
         }
         
-        // Remove the 'examine' choice to prevent clutter
-        room.choices = room.choices.filter(c => c.target !== target);
-        updateUI();
-    }
-
-    function handlePickup(itemId) {
-        const room = rooms[currentRoomId];
-        const itemData = room.items.find(item => item.id === itemId);
-        player.inventory.push({ ...itemData });
-        logAction(`You take the ${itemData.name}.`);
-
-        // Update room state to prevent re-picking
-        if (itemId === 'torch') room.state.tookTorch = true;
-        if (itemId === 'strengthPotion') room.state.tookPotion = true;
-        if (itemId === 'glowingGem') room.state.tookGem = true;
-
-        room.choices = room.choices.filter(c => c.action !== 'pickup' || c.target !== itemId);
         updateUI();
     }
 
     function useItem(itemId) {
-        const itemIndex = player.inventory.findIndex(i => i.id === itemId);
+        const itemIndex = gameState.player.inventory.findIndex(i => i.id === itemId);
         if (itemIndex === -1) return;
         
-        const item = player.inventory[itemIndex];
-        let used = false;
-        let consumable = false;
-
-        // Key Item Usage
-        if (item.id === 'dragonKey' && currentRoomId === 'puzzleChamber') {
+        const item = gameState.player.inventory[itemIndex];
+        let used = false, consumable = false;
+        
+        // Logic for using specific items in specific rooms
+        if (item.id === 'dragonKey' && gameState.currentRoomId === 'puzzleChamber') {
             logAction("You insert the Dragon Key into the slot. The stone door grinds open, revealing two paths.");
-            rooms.puzzleChamber.choices.push({ text: "Enter the Observatory", action: "move", target: "observatory" });
-            rooms.puzzleChamber.choices.push({ text: "Enter the Archives", action: "move", target: "archives" });
-            used = true;
-            consumable = true;
-        } else if (item.id === 'glowingGem' && currentRoomId === 'archives') {
+            const room = gameState.rooms.puzzleChamber;
+            room.choices.push({ text: "Enter the Observatory", action: "move", target: "observatory" });
+            room.choices.push({ text: "Enter the Archives", action: "move", target: "archives" });
+            used = true; consumable = true;
+        } else if (item.id === 'glowingGem' && gameState.currentRoomId === 'archives') {
              logAction("You place the Glowing Gem into the book's indentation. It clicks open!");
-             currentRoomId = 'secretEnd';
-             used = true;
-             consumable = true;
-        } 
-        // Potion Usage
-        else if (item.heal) {
-            player.health = Math.min(player.maxHealth, player.health + item.heal);
-            logAction(`You use the ${item.name} and restore ${item.heal} health.`);
-            used = true;
-            consumable = true;
-        } else if (item.attackBonus) {
-            player.attackBonus += item.attackBonus;
-            logAction(`You drink the ${item.name}. You feel a surge of power! Your attack has increased.`);
-            used = true;
-            consumable = true;
+             gameState.currentRoomId = 'secretEnd';
+             used = true; consumable = true;
         } else {
              logAction("You can't use that here.");
         }
 
         if (used && consumable) {
-            player.inventory.splice(itemIndex, 1);
+            gameState.player.inventory.splice(itemIndex, 1);
         }
         updateUI();
     }
-    
+
     function handleCombat() {
-        if (!currentEnemy) return;
+        const room = gameState.rooms[gameState.currentRoomId];
+        const enemy = room.enemy;
         let combatLog = "";
 
         // Player attacks
-        let playerDamage = (player.inventory.some(i => i.id === 'torch') ? 10 : 5) + player.attackBonus;
-        currentEnemy.health -= playerDamage;
-        combatLog += `You attack the ${currentEnemy.name} for ${playerDamage} damage.`;
+        let weapon = gameState.player.inventory.find(i => i.attack);
+        let playerDamage = gameState.player.baseAttack + (weapon ? weapon.attack : 0);
+        enemy.health -= playerDamage;
+        combatLog += `You attack the ${enemy.name} for ${playerDamage} damage.`;
 
         // Check for enemy defeat
-        if (currentEnemy.health <= 0) {
-            combatLog += `\nYou defeated the ${currentEnemy.name}!`;
-            if (currentEnemy.loot) {
-                player.inventory.push(currentEnemy.loot);
-                combatLog += ` It dropped a ${currentEnemy.loot.name}.`;
+        if (enemy.health <= 0) {
+            combatLog += `\nYou defeated the ${enemy.name}!`;
+            if (enemy.loot) {
+                gameState.player.inventory.push(enemy.loot);
+                combatLog += ` It dropped a ${enemy.loot.name}.`;
             }
-            rooms[currentRoomId].state.enemyDefeated = true;
-            currentEnemy = null;
-            currentRoomId = 'corridorClear';
+            room.state.enemyDefeated = true;
+            gameState.currentRoomId = 'corridorClear';
             logAction(combatLog);
-            updateUI(); // Rerender room after combat ends
+            updateUI();
             return;
         }
 
         // Enemy attacks
-        player.health -= currentEnemy.attack;
-        combatLog += `\nThe ${currentEnemy.name} attacks you for ${currentEnemy.attack} damage.`;
+        gameState.player.health -= enemy.attack;
+        combatLog += `\nThe ${enemy.name} attacks you for ${enemy.attack} damage.`;
         
-        if (player.health <= 0) {
-            player.health = 0;
-            currentRoomId = 'gameOver';
-            updateUI(); // Rerender for game over screen
+        if (gameState.player.health <= 0) {
+            gameState.player.health = 0;
+            gameState.currentRoomId = 'gameOver';
+            updateUI();
+        } else {
+            logAction(combatLog);
+            // Just update health bar without full re-render
+            healthBarElement.style.width = `${(gameState.player.health / gameState.player.maxHealth) * 100}%`;
+            healthValueElement.innerText = `${gameState.player.health}/${gameState.player.maxHealth}`;
         }
-        
-        logAction(combatLog);
-        // Update health bar immediately after hit
-        healthBarElement.style.width = `${(player.health / player.maxHealth) * 100}%`;
-        healthValueElement.innerText = `${player.health}/${player.maxHealth}`;
     }
-
-    // --- UTILITY FUNCTIONS ---
+    
+    // --- UTILITY & SYSTEM FUNCTIONS ---
     function createButton(text, onClick) {
         const button = document.createElement('button');
         button.innerText = text;
@@ -320,18 +275,19 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     function logAction(text, isCritical = false) {
-        actionLogElement.innerHTML = text;
+        actionLogElement.innerText = text;
         actionLogElement.className = isCritical ? 'critical-warning' : '';
     }
 
     function updateInventory() {
         inventoryListElement.innerHTML = '';
-        if (player.inventory.length === 0) {
-            inventoryListElement.innerHTML = '<li>Empty</li>';
+        if (gameState.player.inventory.length === 0) {
+            inventoryListElement.innerHTML = '<li>(Empty)</li>';
         } else {
-            player.inventory.forEach(item => {
+            gameState.player.inventory.forEach(item => {
                 const li = document.createElement('li');
                 li.innerText = item.name;
+                li.title = `Click to use ${item.name}`;
                 li.addEventListener('click', () => useItem(item.id));
                 inventoryListElement.appendChild(li);
             });
@@ -344,7 +300,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }
     
     function showEchoHint() {
-        const room = rooms[currentRoomId];
+        const room = gameState.rooms[gameState.currentRoomId];
         if (room && room.echo) echoHintElement.innerText = room.echo;
     }
 
@@ -352,9 +308,8 @@ document.addEventListener('DOMContentLoaded', () => {
         echoHintElement.innerText = '';
     }
 
-    // --- SAVE / LOAD ---
+    // --- SAVE / LOAD / RESTART EVENT LISTENERS ---
     document.getElementById('save-button').addEventListener('click', () => {
-        const gameState = { player, rooms, currentRoomId };
         localStorage.setItem('dungeonGameState', JSON.stringify(gameState));
         logAction("Game Saved!");
     });
@@ -362,10 +317,7 @@ document.addEventListener('DOMContentLoaded', () => {
     document.getElementById('load-button').addEventListener('click', () => {
         const savedState = localStorage.getItem('dungeonGameState');
         if (savedState) {
-            const gameState = JSON.parse(savedState);
-            player = gameState.player;
-            rooms = gameState.rooms;
-            currentRoomId = gameState.currentRoomId;
+            gameState = JSON.parse(savedState);
             logAction("Game Loaded!");
             updateUI();
         } else {
@@ -373,8 +325,12 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     });
     
-    document.getElementById('restart-button').addEventListener('click', () => handleAction({ action: 'restart' }));
+    document.getElementById('restart-button').addEventListener('click', () => {
+        if(confirm("Are you sure you want to restart? All unsaved progress will be lost.")) {
+            startGame();
+        }
+    });
 
-    // --- INITIALIZE ---
+    // --- Let the adventure begin! ---
     startGame();
 });
