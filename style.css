@@ -28,13 +28,13 @@ body {
     padding: 15px;
     border-bottom: 2px solid #444;
     flex-wrap: wrap; /* Allow wrapping on small screens */
+    gap: 15px;
 }
 
 #player-stats {
     display: flex;
     align-items: center;
-    flex-grow: 1; /* Allow it to take up space */
-    margin-bottom: 10px; /* Add margin for when it wraps */
+    flex-grow: 1; 
 }
 
 #health-bar-container {
@@ -56,7 +56,7 @@ body {
 
 #nav-menu {
     display: flex;
-    gap: 10px; /* Space between buttons */
+    gap: 10px; 
 }
 
 #main-content {
@@ -97,7 +97,11 @@ button {
     font-size: 1em;
     border-radius: 3px;
     transition: background-color 0.2s;
-    flex-grow: 1; /* Allow buttons to grow */
+    flex-grow: 1;
+}
+
+#nav-menu button {
+    flex-grow: 0; /* Nav buttons shouldn't grow */
 }
 
 button:hover {
@@ -136,7 +140,7 @@ button:hover {
     padding: 0;
     margin: 0;
     display: flex;
-    flex-direction: column; /* Stack inventory items */
+    flex-direction: column;
     gap: 8px;
 }
 
@@ -163,6 +167,7 @@ button:hover {
 .critical-warning {
     color: #ff4d4d;
     font-weight: bold;
+    text-align: center;
 }
 
 /* --- Mobile Responsiveness --- */
@@ -172,7 +177,6 @@ button:hover {
         align-items: stretch;
     }
     #player-stats {
-        margin-bottom: 15px;
         justify-content: center;
     }
     #nav-menu {

@@ -1,15 +1,22 @@
 document.addEventListener('DOMContentLoaded', () => {
+    'use strict';
+
     // --- UI ELEMENTS ---
-    const storyTextElement = document.getElementById('story-text');
-    const echoHintElement = document.getElementById('echo-hint');
-    const choicesButtonsElement = document.getElementById('choices-buttons');
-    const healthBarElement = document.getElementById('health-bar');
-    const healthValueElement = document.getElementById('health-value');
-    const inventoryListElement = document.getElementById('inventory-list');
-    const actionLogElement = document.getElementById('action-log');
+    const ui = {
+        storyText: document.getElementById('story-text'),
+        echoHint: document.getElementById('echo-hint'),
+        choicesButtons: document.getElementById('choices-buttons'),
+        healthBar: document.getElementById('health-bar'),
+        healthValue: document.getElementById('health-value'),
+        inventoryList: document.getElementById('inventory-list'),
+        actionLog: document.getElementById('action-log'),
+        saveButton: document.getElementById('save-button'),
+        loadButton: document.getElementById('load-button'),
+        restartButton: document.getElementById('restart-button')
+    };
 
     // --- MASTER GAME DATA (The unchanging blueprint) ---
-    const masterRooms = {
+    const masterRoomsData = {
         start: {
             description: "You stand at the entrance to a long-forgotten dungeon. A heavy wooden door looms in front of you. The air is thick with dust. A faint, cool breeze emanates from a crack in the wall to your left.",
             choices: [
@@ -22,15 +29,13 @@ document.addEventListener('DOMContentLoaded', () => {
                 crack: "You find a hidden passage behind a loose section of the wall! It's a tight squeeze.",
                 room: "You scan the dusty room. Against the wall rests a single, flickering torch. It might be useful."
             },
-            items: [{ id: 'torch', name: 'Flickering Torch', attack: 5 }],
-            state: { revealedPassage: false, itemTaken: false },
+            item: { id: 'torch', name: 'Flickering Torch', attack: 5 },
             echo: "Perhaps the door is not the only way forward..."
         },
         goblinCorridor: {
             description: "You squeeze through the passage into a narrow corridor. A foul-smelling goblin holding a crude club is startled by your arrival!",
             enemy: { name: "Goblin", health: 30, maxHealth: 30, attack: 10, loot: { id: 'dragonKey', name: 'Dragon Key' } },
             choices: [ { text: "Flee back to the entrance", action: "move", target: "start" } ],
-            state: { enemyDefeated: false },
             echo: "Combat is dangerous. Do you have a weapon?"
         },
         corridorClear: {
@@ -52,16 +57,14 @@ document.addEventListener('DOMContentLoaded', () => {
                 puzzleDoor: "The dragon-shaped slot seems to be waiting for a key.",
                 rubble: "Hidden in the rubble, you find a small vial containing a shimmering red liquid."
             },
-            items: [{ id: 'strengthPotion', name: 'Potion of Strength', attackBonus: 10 }],
-            state: { itemTaken: false },
+            item: { id: 'strengthPotion', name: 'Potion of Strength', attackBonus: 10 },
             echo: "A key with a unique shape might be needed for the door."
         },
         observatory: {
             description: "This room was once a grand observatory, but the ceiling has collapsed, leaving a massive hole open to the sky. Starlight filters down, illuminating a pedestal in the center of the room.",
             choices: [{ text: "Approach the pedestal", action: "examine", target: "pedestal" }],
             onExamine: { pedestal: "You approach the pedestal and see the source of the light: a magnificent, Glowing Gem that hums with energy." },
-            items: [{ id: 'glowingGem', name: 'Glowing Gem' }],
-            state: { itemTaken: false },
+            item: { id: 'glowingGem', name: 'Glowing Gem' },
             echo: "Such a beautiful object must have a purpose."
         },
         archives: {
@@ -86,36 +89,33 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // --- GAME INITIALIZATION ---
     function startGame() {
-        // Deep copy master data to create a fresh session state
         gameState = {
             player: { health: 100, maxHealth: 100, inventory: [], baseAttack: 2 },
             currentRoomId: 'start',
-            rooms: JSON.parse(JSON.stringify(masterRooms)) // Crucial for restartable, clean state
+            roomStates: {} // Stores dynamic state like { start: { itemTaken: true }, ... }
         };
-        updateUI();
+        // Initialize room states
+        for (const roomId in masterRoomsData) {
+            gameState.roomStates[roomId] = {};
+        }
+        render();
     }
 
-    // --- CORE UI RENDERER ---
-    function updateUI() {
+    // --- CORE RENDERER ---
+    function render() {
         resetEchoTimer();
-        clearEchoHint();
+        const roomData = masterRoomsData[gameState.currentRoomId];
+        const roomState = gameState.roomStates[gameState.currentRoomId];
 
-        const room = gameState.rooms[gameState.currentRoomId];
-
-        // --- Safety Check: Ensure the room exists ---
-        if (!room) {
-            storyTextElement.innerText = "A critical error has occurred. The world has vanished. Please restart the game.";
-            console.error(`Error: Room with ID "${gameState.currentRoomId}" not found.`);
-            choicesButtonsElement.innerHTML = '';
-            choicesButtonsElement.appendChild(createButton("Restart", startGame));
+        if (!roomData) {
+            ui.storyText.innerText = "ERROR: Room not found. Please restart.";
+            console.error("Attempted to render non-existent room:", gameState.currentRoomId);
             return;
         }
 
-        // --- Render Room and Choices ---
-        storyTextElement.innerText = room.description;
-        choicesButtonsElement.innerHTML = '';
-        actionLogElement.className = '';
-        actionLogElement.innerText = '';
+        ui.storyText.innerText = roomData.description;
+        ui.choicesButtons.innerHTML = '';
+        logAction(''); // Clear log on every new render
 
         // --- Low Health Warning ---
         const isCritical = gameState.player.health > 0 && gameState.player.health / gameState.player.maxHealth <= 0.2;
@@ -124,77 +124,70 @@ document.addEventListener('DOMContentLoaded', () => {
             const healingPotions = gameState.player.inventory.filter(item => item.heal);
             if (healingPotions.length > 0) {
                 healingPotions.forEach(potion => {
-                    choicesButtonsElement.appendChild(createButton(`Use ${potion.name}`, () => useItem(potion.id)));
+                    ui.choicesButtons.appendChild(createButton(`Use ${potion.name}`, () => useItem(potion.id)));
                 });
             }
         }
         
         // --- Combat UI ---
-        if (room.enemy && !room.state.enemyDefeated) {
-             choicesButtonsElement.appendChild(createButton("Attack " + room.enemy.name, () => handleAction({ action: 'attack' })));
+        if (roomData.enemy && !roomState.enemyDefeated) {
+             ui.choicesButtons.appendChild(createButton("Attack " + roomData.enemy.name, () => handleAction({ action: 'attack' })));
         }
 
         // --- Standard Choices ---
-        if (room.choices) {
-            room.choices.forEach(choice => {
-                choicesButtonsElement.appendChild(createButton(choice.text, () => handleAction(choice)));
+        if (roomData.choices) {
+            roomData.choices.forEach(choice => {
+                // Hide choices that are no longer relevant (e.g., examine after it's done)
+                if (roomState[choice.target + 'Examined']) return;
+                ui.choicesButtons.appendChild(createButton(choice.text, () => handleAction(choice)));
             });
         }
         
         // --- Update Stats and Inventory ---
-        healthBarElement.style.width = `${(gameState.player.health / gameState.player.maxHealth) * 100}%`;
-        healthValueElement.innerText = `${gameState.player.health}/${gameState.player.maxHealth}`;
-        updateInventory();
+        updatePlayerStatsUI();
+        updateInventoryUI();
     }
     
     // --- ACTION HANDLER ---
     function handleAction(choice) {
+        clearEchoHint();
         const { action, target } = choice;
-        const room = gameState.rooms[gameState.currentRoomId];
+        const roomData = masterRoomsData[gameState.currentRoomId];
+        const roomState = gameState.roomStates[gameState.currentRoomId];
         
-        // --- Process Action ---
         switch (action) {
             case 'move':
                 gameState.currentRoomId = target;
                 break;
             case 'examine':
-                logAction(room.onExamine[target]);
-                // Add contextual choices post-examination
-                if (target === 'crack' && !room.state.revealedPassage) {
-                    room.choices.push({ text: "Squeeze through the passage", action: 'move', target: 'goblinCorridor' });
-                    room.state.revealedPassage = true;
+                logAction(roomData.onExamine[target]);
+                roomState[target + 'Examined'] = true; // Mark as examined
+                // Contextual choices
+                if (target === 'crack' && !roomState.revealedPassage) {
+                    roomData.choices.push({ text: "Squeeze through the passage", action: 'move', target: 'goblinCorridor' });
+                    roomState.revealedPassage = true;
+                } else if (roomData.item && !roomState.itemTaken) {
+                    roomData.choices.push({ text: `Take the ${roomData.item.name}`, action: 'pickup' });
                 }
-                if (target === 'room' && !room.state.itemTaken) {
-                    room.choices.push({ text: `Take the ${room.items[0].name}`, action: 'pickup', target: room.items[0].id });
-                }
-                if (target === 'rubble' && !room.state.itemTaken) {
-                    room.choices.push({ text: `Take the ${room.items[0].name}`, action: 'pickup', target: room.items[0].id });
-                }
-                if (target === 'pedestal' && !room.state.itemTaken) {
-                    room.choices.push({ text: `Take the ${room.items[0].name}`, action: 'pickup', target: room.items[0].id });
-                }
-                // Remove the examine choice after it's used
-                room.choices = room.choices.filter(c => c.target !== target);
                 break;
             case 'pickup':
-                const itemData = room.items.find(item => item.id === target);
-                gameState.player.inventory.push(itemData);
-                logAction(`You take the ${itemData.name}.`);
-                room.state.itemTaken = true;
-                room.choices = room.choices.filter(c => c.action !== 'pickup');
+                const item = roomData.item;
+                gameState.player.inventory.push(item);
+                logAction(`You take the ${item.name}.`);
+                roomState.itemTaken = true;
+                roomData.choices = roomData.choices.filter(c => c.action !== 'pickup');
                 break;
             case 'attack':
                 handleCombat();
-                break;
+                return; // Combat handles its own rendering
             case 'win':
                 gameState.currentRoomId = 'secretEnd';
                 break;
             case 'restart':
-                startGame();
-                return; // Exit to prevent double render
+                if (confirm("Are you sure you want to restart?")) startGame();
+                return;
         }
-        
-        updateUI();
+        render();
     }
 
     function useItem(itemId) {
@@ -204,10 +197,9 @@ document.addEventListener('DOMContentLoaded', () => {
         const item = gameState.player.inventory[itemIndex];
         let used = false, consumable = false;
         
-        // Logic for using specific items in specific rooms
         if (item.id === 'dragonKey' && gameState.currentRoomId === 'puzzleChamber') {
             logAction("You insert the Dragon Key into the slot. The stone door grinds open, revealing two paths.");
-            const room = gameState.rooms.puzzleChamber;
+            const room = masterRoomsData.puzzleChamber;
             room.choices.push({ text: "Enter the Observatory", action: "move", target: "observatory" });
             room.choices.push({ text: "Enter the Archives", action: "move", target: "archives" });
             used = true; consumable = true;
@@ -222,114 +214,110 @@ document.addEventListener('DOMContentLoaded', () => {
         if (used && consumable) {
             gameState.player.inventory.splice(itemIndex, 1);
         }
-        updateUI();
+        render();
     }
 
     function handleCombat() {
-        const room = gameState.rooms[gameState.currentRoomId];
-        const enemy = room.enemy;
+        const roomData = masterRoomsData[gameState.currentRoomId];
+        const roomState = gameState.roomStates[gameState.currentRoomId];
+        const enemy = roomData.enemy;
         let combatLog = "";
 
         // Player attacks
-        let weapon = gameState.player.inventory.find(i => i.attack);
-        let playerDamage = gameState.player.baseAttack + (weapon ? weapon.attack : 0);
+        const weapon = gameState.player.inventory.find(i => i.attack);
+        const attackBonus = gameState.player.inventory.find(i => i.attackBonus) || { attackBonus: 0 };
+        const playerDamage = gameState.player.baseAttack + (weapon ? weapon.attack : 0) + attackBonus.attackBonus;
+        
         enemy.health -= playerDamage;
         combatLog += `You attack the ${enemy.name} for ${playerDamage} damage.`;
 
-        // Check for enemy defeat
+        // Enemy defeat check
         if (enemy.health <= 0) {
             combatLog += `\nYou defeated the ${enemy.name}!`;
             if (enemy.loot) {
                 gameState.player.inventory.push(enemy.loot);
                 combatLog += ` It dropped a ${enemy.loot.name}.`;
             }
-            room.state.enemyDefeated = true;
+            roomState.enemyDefeated = true;
             gameState.currentRoomId = 'corridorClear';
             logAction(combatLog);
-            updateUI();
+            render();
             return;
         }
 
         // Enemy attacks
         gameState.player.health -= enemy.attack;
         combatLog += `\nThe ${enemy.name} attacks you for ${enemy.attack} damage.`;
+        logAction(combatLog);
+        updatePlayerStatsUI();
         
         if (gameState.player.health <= 0) {
             gameState.player.health = 0;
             gameState.currentRoomId = 'gameOver';
-            updateUI();
-        } else {
-            logAction(combatLog);
-            // Just update health bar without full re-render
-            healthBarElement.style.width = `${(gameState.player.health / gameState.player.maxHealth) * 100}%`;
-            healthValueElement.innerText = `${gameState.player.health}/${gameState.player.maxHealth}`;
+            render();
         }
     }
     
-    // --- UTILITY & SYSTEM FUNCTIONS ---
-    function createButton(text, onClick) {
-        const button = document.createElement('button');
-        button.innerText = text;
-        button.addEventListener('click', onClick);
-        return button;
+    // --- UI UTILITY FUNCTIONS ---
+    function updatePlayerStatsUI() {
+        const p = gameState.player;
+        ui.healthBar.style.width = `${(p.health / p.maxHealth) * 100}%`;
+        ui.healthValue.innerText = `${p.health}/${p.maxHealth}`;
     }
-
-    function logAction(text, isCritical = false) {
-        actionLogElement.innerText = text;
-        actionLogElement.className = isCritical ? 'critical-warning' : '';
-    }
-
-    function updateInventory() {
-        inventoryListElement.innerHTML = '';
+    function updateInventoryUI() {
+        ui.inventoryList.innerHTML = '';
         if (gameState.player.inventory.length === 0) {
-            inventoryListElement.innerHTML = '<li>(Empty)</li>';
+            ui.inventoryList.innerHTML = '<li>(Empty)</li>';
         } else {
             gameState.player.inventory.forEach(item => {
                 const li = document.createElement('li');
                 li.innerText = item.name;
                 li.title = `Click to use ${item.name}`;
                 li.addEventListener('click', () => useItem(item.id));
-                inventoryListElement.appendChild(li);
+                ui.inventoryList.appendChild(li);
             });
         }
     }
+    function createButton(text, onClick) {
+        const button = document.createElement('button');
+        button.innerText = text;
+        button.addEventListener('click', onClick);
+        return button;
+    }
+    function logAction(text, isCritical = false) {
+        ui.actionLog.innerText = text;
+        ui.actionLog.className = isCritical ? 'critical-warning' : '';
+    }
 
+    // --- ECHO HINT SYSTEM ---
     function resetEchoTimer() {
         clearTimeout(echoTimer);
         echoTimer = setTimeout(showEchoHint, 90000);
     }
-    
     function showEchoHint() {
-        const room = gameState.rooms[gameState.currentRoomId];
-        if (room && room.echo) echoHintElement.innerText = room.echo;
+        const roomData = masterRoomsData[gameState.currentRoomId];
+        if (roomData && roomData.echo) ui.echoHint.innerText = roomData.echo;
     }
-
     function clearEchoHint() {
-        echoHintElement.innerText = '';
+        ui.echoHint.innerText = '';
     }
 
-    // --- SAVE / LOAD / RESTART EVENT LISTENERS ---
-    document.getElementById('save-button').addEventListener('click', () => {
+    // --- SYSTEM EVENT LISTENERS ---
+    ui.saveButton.addEventListener('click', () => {
         localStorage.setItem('dungeonGameState', JSON.stringify(gameState));
         logAction("Game Saved!");
     });
-
-    document.getElementById('load-button').addEventListener('click', () => {
+    ui.loadButton.addEventListener('click', () => {
         const savedState = localStorage.getItem('dungeonGameState');
         if (savedState) {
             gameState = JSON.parse(savedState);
             logAction("Game Loaded!");
-            updateUI();
+            render();
         } else {
             logAction("No saved game found.");
         }
     });
-    
-    document.getElementById('restart-button').addEventListener('click', () => {
-        if(confirm("Are you sure you want to restart? All unsaved progress will be lost.")) {
-            startGame();
-        }
-    });
+    ui.restartButton.addEventListener('click', () => handleAction({ action: 'restart' }));
 
     // --- Let the adventure begin! ---
     startGame();
