@@ -15,7 +15,7 @@ body {
     width: 100%;
     max-width: 900px;
     border: 2px solid #b8860b;
-    background-color: #2b2b2b;
+    background-color: #1f1f1f;
     box-shadow: 0 0 20px rgba(255, 193, 7, 0.2);
     display: flex;
     flex-direction: column;
@@ -27,12 +27,14 @@ body {
     align-items: center;
     padding: 15px;
     border-bottom: 2px solid #444;
-    background-color: #1f1f1f;
+    flex-wrap: wrap; /* Allow wrapping on small screens */
 }
 
 #player-stats {
     display: flex;
     align-items: center;
+    flex-grow: 1; /* Allow it to take up space */
+    margin-bottom: 10px; /* Add margin for when it wraps */
 }
 
 #health-bar-container {
@@ -52,8 +54,9 @@ body {
     transition: width 0.3s ease-in-out;
 }
 
-#nav-menu button {
-    margin-left: 10px;
+#nav-menu {
+    display: flex;
+    gap: 10px; /* Space between buttons */
 }
 
 #main-content {
@@ -67,7 +70,7 @@ body {
     margin-bottom: 20px;
     line-height: 1.6;
     font-size: 1.1em;
-    min-height: 150px;
+    min-height: 120px;
 }
 
 .echo-hint {
@@ -75,6 +78,7 @@ body {
     font-style: italic;
     margin-bottom: 15px;
     min-height: 20px;
+    text-align: center;
 }
 
 #choices-buttons {
@@ -93,6 +97,7 @@ button {
     font-size: 1em;
     border-radius: 3px;
     transition: background-color 0.2s;
+    flex-grow: 1; /* Allow buttons to grow */
 }
 
 button:hover {
@@ -103,12 +108,13 @@ button:hover {
 #status-panels {
     display: flex;
     border-top: 2px solid #444;
-    background-color: #1f1f1f;
+    background-color: #121212;
 }
 
 #inventory-panel, #action-log-panel {
     width: 50%;
     padding: 15px;
+    box-sizing: border-box;
 }
 
 #inventory-panel {
@@ -130,8 +136,8 @@ button:hover {
     padding: 0;
     margin: 0;
     display: flex;
-    flex-wrap: wrap;
-    gap: 10px;
+    flex-direction: column; /* Stack inventory items */
+    gap: 8px;
 }
 
 #inventory-list li {
@@ -140,6 +146,7 @@ button:hover {
     border: 1px solid #555;
     border-radius: 3px;
     cursor: pointer;
+    text-align: center;
 }
 
 #inventory-list li:hover {
@@ -156,4 +163,29 @@ button:hover {
 .critical-warning {
     color: #ff4d4d;
     font-weight: bold;
+}
+
+/* --- Mobile Responsiveness --- */
+@media (max-width: 600px) {
+    #header {
+        flex-direction: column;
+        align-items: stretch;
+    }
+    #player-stats {
+        margin-bottom: 15px;
+        justify-content: center;
+    }
+    #nav-menu {
+        flex-direction: column;
+    }
+    #status-panels {
+        flex-direction: column;
+    }
+    #inventory-panel, #action-log-panel {
+        width: 100%;
+    }
+    #inventory-panel {
+        border-right: none;
+        border-bottom: 1px solid #444;
+    }
 }
