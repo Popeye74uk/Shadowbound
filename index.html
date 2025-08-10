@@ -9,58 +9,35 @@
 <body>
     <div id="game-container">
         <div id="header">
-            <h1 id="game-title">The Forgotten Dungeon</h1>
+            <div id="player-stats">
+                <span>Health:</span>
+                <div id="health-bar-container">
+                    <div id="health-bar"></div>
+                </div>
+                <span id="health-value">100/100</span>
+            </div>
             <div id="nav-menu">
-                <button id="hint-btn" title="Get a hint">💡 Hint</button>
-                <button id="restart-btn" title="Restart the game">Restart</button>
-                <button id="save-btn" title="Save your progress">Save</button>
-                <button id="load-btn" title="Load your last save">Load</button>
+                <button id="save-button">Save Game</button>
+                <button id="load-button">Load Game</button>
+                <button id="restart-button">Restart Game</button>
             </div>
         </div>
-
-        <div id="main-interface">
-            <div id="story-panel">
-                <div id="room-title-container">
-                    <h2 id="room-title"></h2>
-                </div>
-                <div id="story-text"></div>
-                <div id="feedback-text"></div>
-                <div id="choices-buttons"></div>
-            </div>
-
-            <div id="side-panel">
-                <div id="player-stats">
-                    <h3>Player Stats</h3>
-                    <div id="health-container">
-                        <span>Health:</span>
-                        <div id="health-bar-container">
-                            <div id="health-bar"></div>
-                        </div>
-                        <span id="health-text">100/100</span>
-                    </div>
-                </div>
-                <div id="inventory-panel">
-                    <div id="inventory-header">
-                        <h3>Inventory</h3>
-                        <span id="inventory-counter">0 / 8</span>
-                    </div>
-                    <ul id="inventory-list"><li>Your inventory is empty.</li></ul>
-                </div>
-            </div>
+        <div id="main-content">
+            <div id="story-text"></div>
+            <div id="echo-hint" class="echo-hint"></div>
+            <div id="choices-buttons"></div>
         </div>
-
-        <div id="item-modal" class="hidden">
-            <div id="item-modal-content">
-                <h3 id="item-modal-title"></h3>
-                <p id="item-modal-description"></p>
-                <div id="item-modal-buttons">
-                    <button id="item-use-btn">Use</button>
-                    <button id="item-drop-btn">Drop</button>
-                    <button id="item-modal-close-btn">Close</button>
-                </div>
+        <div id="status-panels">
+            <div id="inventory-panel">
+                <h2>INVENTORY</h2>
+                <ul id="inventory-list"></ul>
+            </div>
+            <div id="action-log-panel">
+                <h2>LOG</h2>
+                <div id="action-log"></div>
             </div>
         </div>
     </div>
-    <script src="script.js"></script>
+    <script src="game.js"></script>
 </body>
 </html>
