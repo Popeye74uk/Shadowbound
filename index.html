@@ -3,11 +3,9 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Battleship Solo v1.0</title>
+    <title>Battleship Solo v1.1</title>
     <!-- Link to the external CSS file -->
     <link rel="stylesheet" href="battleship-style.css">
-    <!-- Primes the PDF library for faster loading -->
-    <link rel="preload" href="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js" as="script">
 </head>
 <body>
     <div class="container">
@@ -31,7 +29,6 @@
                 <div id="loader" class="loader hidden">
                     <div class="spinner"></div>
                     <span id="loader-text"></span>
-                    <button id="cancel-btn" onclick="cancelBookGeneration()">Cancel</button>
                 </div>
             </div>
             <div id="fleet-display">
@@ -63,33 +60,10 @@
             <button id="generate-btn">New Puzzle</button>
             <button id="hint-btn">Hint</button>
             <button id="reveal-btn">Reveal Solution</button>
-            <button id="download-pdf-btn">Download as PDF</button>
-            <button id="make-book-btn">Make Book</button>
-        </div>
-
-        <div id="generate-book-controls">
-            <h3>Make a Book</h3>
-            <div class="book-options-grid">
-                <label for="book-title-input">Book Title:</label>
-                <input type="text" id="book-title-input" placeholder="e.g., My Battleship Puzzle Book">
-                <label for="book-subtitle-input">Subtitle:</label>
-                <input type="text" id="book-subtitle-input" placeholder="e.g., By Logic Master">
-                <label for="puzzle-count-input">Puzzles:</label>
-                <input type="number" id="puzzle-count-input" value="10" min="1" max="100" style="width: 70px;">
-                <label>Options:</label>
-                <div id="book-checkbox-options">
-                    <label><input type="checkbox" id="answer-key-checkbox" checked> Answer Key</label>
-                    <label><input type="checkbox" id="page-numbers-checkbox" checked> Page Numbers</label>
-                </div>
-            </div>
-            <div class="controls-grid">
-                <button id="create-book-btn">Create Book</button>
-                <button id="cancel-book-options-btn">Cancel</button>
-            </div>
         </div>
 
         <div id="status-container"><p id="source-status"></p></div>
-        <div id="version-info">v1.0</div>
+        <div id="version-info">v1.1</div>
     </div>
 
     <div id="completion-modal">
@@ -104,8 +78,6 @@
         </div>
     </div>
     
-    <!-- Third-party library for PDF generation -->
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
     <!-- Link to the external JavaScript file -->
     <script src="battleship-logic.js"></script>
 </body>

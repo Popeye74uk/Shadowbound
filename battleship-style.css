@@ -20,7 +20,6 @@
     --color-danger: #dc3545;
     --color-warning: #fd7e14;
     --color-info: #6f42c1; /* Hint color */
-    --color-pink: #d63384;
     
     /* Game-Specific Colors */
     --color-cell-water-guess: #d0e8ff;
@@ -72,11 +71,11 @@ body {
 .header-buttons { display: flex; gap: 10px; }
 .header-spacer { min-width: 100px; flex-shrink: 0; }
 
-#game-board { display: flex; justify-content: center; align-items: flex-start; gap: 30px; }
+#game-board { display: flex; justify-content: center; align-items: flex-start; gap: 20px; flex-wrap: wrap; }
 #game-board:fullscreen { background-color: var(--color-background); padding: 20px; box-sizing: border-box; }
 
-#puzzle-container { position: relative; }
-#grid-container { display: grid; gap: 1px; background-color: var(--color-grid-lines); border: 1px solid var(--color-grid-lines); }
+#puzzle-container { position: relative; max-width: 500px; width: 100%; flex-grow: 1; }
+#grid-container { display: grid; gap: 1px; background-color: var(--color-grid-lines); border: 1px solid var(--color-grid-lines); margin: 0 auto; }
 .grid-cell { background-color: var(--color-grid-cell-bg); user-select: none; transition: background-color 0.2s; position: relative; }
 .clue-cell { text-align: center; font-weight: bold; background-color: var(--color-container-bg); }
 .clue-cell.satisfied { background-color: var(--color-clue-satisfied); }
@@ -103,7 +102,7 @@ body.dark-mode .loader { background-color: var(--color-background); }
 .ship-icon div { width: 14px; height: 14px; background-color: var(--color-text-secondary); border-radius: 2px;}
 #fleet-list li.found .ship-icon div { background-color: var(--color-grid-lines); }
 
-.controls-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 15px; max-width: 415px; margin: 25px auto 0 auto; }
+.controls-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 15px; max-width: 500px; margin: 25px auto 0 auto; }
 .global-options-container { display: flex; justify-content: center; align-items: center; gap: 10px 25px; margin-top: 25px; margin-bottom: -10px; font-size: 1em; color: var(--color-text-primary); }
 .option-group { display: flex; align-items: center; gap: 10px; }
 button { padding: 12px 20px; font-size: 1em; font-weight: bold; cursor: pointer; color: white; border: none; border-radius: 5px; transition: all 0.2s; box-shadow: 0 2px 4px var(--color-box-shadow); width: 100%; box-sizing: border-box; }
@@ -111,16 +110,7 @@ button:hover:not(:disabled) { transform: translateY(-2px); box-shadow: 0 4px 8px
 button:disabled { background-color: var(--color-button-disabled-bg); cursor: not-allowed; opacity: 0.7; }
 #generate-btn { background-color: var(--color-primary); }
 #reveal-btn { background-color: var(--color-success); }
-#download-pdf-btn { background-color: var(--color-pink); }
-#make-book-btn { background-color: var(--color-danger); }
 #hint-btn { background-color: var(--color-info); }
-#create-book-btn { background-color: var(--color-success); }
-#cancel-btn, #cancel-book-options-btn { background-color: var(--color-text-secondary); }
-#cancel-btn { min-width: 120px; width: auto; }
-#generate-book-controls { display: none; }
-.book-options-grid { display: grid; grid-template-columns: auto 1fr; justify-content: center; align-items: center; gap: 10px 15px; margin: 15px auto 0 auto; max-width: 415px; }
-.book-options-grid label { text-align: right; }
-#book-checkbox-options { display: flex; gap: 15px; align-items: center; justify-content: flex-start; }
 
 #status-container { text-align: center; margin-top: 15px; font-style: italic; min-height: 20px; color: var(--color-text-secondary); }
 #version-info { text-align: center; margin-top: 20px; font-size: 0.8em; color: var(--color-grid-lines); }
@@ -143,26 +133,12 @@ button:disabled { background-color: var(--color-button-disabled-bg); cursor: not
 body.dark-mode .icon-sun { display: block; }
 body:not(.dark-mode) .icon-moon { display: block; }
 
-@media print { 
-    @page { size: A4; margin: 0.5in; } 
-    body { background-color: #fff; font-size: 12pt; margin: 0; padding: 0; } 
-    .container { width: 100%; margin: 0; padding: 0; box-shadow: none; } 
-    .main-header, .global-options-container, .controls-grid, #generate-book-controls, #status-container, #version-info, #fleet-display { display: none; } 
-    #puzzle-container { border: none; } 
-}
-
 @media (max-width: 768px) {
-    #game-board { flex-direction: column; align-items: center; }
-    #fleet-display { width: 100%; max-width: 300px; }
-    #fleet-list { display: grid; grid-template-columns: 1fr 1fr; gap: 0 20px; }
-    .book-options-grid { grid-template-columns: 1fr; }
-    .book-options-grid label { text-align: left; }
     .global-options-container { flex-direction: column; gap: 15px; align-items: center; max-width: 415px; margin-left: auto; margin-right: auto; }
     .option-group { width: 100%; justify-content: space-between; }
 }
 
 @media (max-width: 480px) {
     .main-header h1 { font-size: 1.5em; }
-    .controls-grid { grid-template-columns: 1fr; }
     .modal-content h2 { font-size: 2em; }
 }
