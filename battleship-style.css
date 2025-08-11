@@ -66,10 +66,28 @@ body {
 
 .container { width: 100%; max-width: 900px; margin: 0 auto; }
 
-.main-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; }
-.main-header h1 { flex-grow: 1; margin: 0; padding: 0 10px; text-align: center; }
-.header-buttons { display: flex; gap: 10px; }
-.header-spacer { min-width: 100px; flex-shrink: 0; }
+/* UPDATED: Header uses grid for perfect centering */
+.main-header {
+    display: grid;
+    grid-template-columns: 1fr auto 1fr;
+    align-items: center;
+    margin-bottom: 20px;
+}
+.main-header h1 {
+    grid-column: 2;
+    text-align: center;
+    margin: 0;
+}
+.main-header .header-buttons {
+    grid-column: 3;
+    display: flex;
+    gap: 10px;
+    justify-self: end;
+}
+.main-header .header-spacer {
+    grid-column: 1;
+}
+
 
 #game-board { display: flex; justify-content: center; align-items: flex-start; gap: 20px; flex-wrap: wrap; }
 #game-board:fullscreen { background-color: var(--color-background); padding: 20px; box-sizing: border-box; }
@@ -77,7 +95,15 @@ body {
 #puzzle-container { position: relative; max-width: 500px; width: 100%; flex-grow: 1; }
 #grid-container { display: grid; gap: 1px; background-color: var(--color-grid-lines); border: 1px solid var(--color-grid-lines); margin: 0 auto; }
 .grid-cell { background-color: var(--color-grid-cell-bg); user-select: none; transition: background-color 0.2s; position: relative; }
-.clue-cell { text-align: center; font-weight: bold; background-color: var(--color-container-bg); }
+
+/* UPDATED: Clue cells now use flexbox for centering */
+.clue-cell {
+    font-weight: bold;
+    background-color: var(--color-container-bg);
+    display: flex;
+    justify-content: center;
+    align-items: center;
+}
 .clue-cell.satisfied { background-color: var(--color-clue-satisfied); }
 .game-cell { cursor: pointer; }
 .game-cell.water { background-color: var(--color-cell-water-guess); }
@@ -101,6 +127,20 @@ body.dark-mode .loader { background-color: var(--color-background); }
 .ship-icon { display: flex; gap: 2px; }
 .ship-icon div { width: 14px; height: 14px; background-color: var(--color-text-secondary); border-radius: 2px;}
 #fleet-list li.found .ship-icon div { background-color: var(--color-grid-lines); }
+
+/* NEW: Styles for the instructions container */
+#instructions-container {
+    max-width: 500px;
+    margin: 20px auto 0 auto;
+    text-align: center;
+    color: var(--color-text-secondary);
+    font-style: italic;
+    padding: 0 15px;
+}
+#instructions-container b {
+    color: var(--color-text-primary);
+    font-style: normal;
+}
 
 .controls-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 15px; max-width: 500px; margin: 25px auto 0 auto; }
 .global-options-container { display: flex; justify-content: center; align-items: center; gap: 10px 25px; margin-top: 25px; margin-bottom: -10px; font-size: 1em; color: var(--color-text-primary); }
