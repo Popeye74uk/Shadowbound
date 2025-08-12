@@ -70,7 +70,6 @@ body {
 
 .container { width: 100%; max-width: 500px; margin: 0 auto; }
 
-/* UPDATED: Robust grid layout for header centering */
 .main-header {
     display: grid;
     grid-template-columns: minmax(54px, 1fr) auto minmax(54px, 1fr);
@@ -81,7 +80,7 @@ body {
     grid-column: 2;
     text-align: center;
     margin: 0;
-    padding: 0 10px; /* Add padding for breathing room */
+    padding: 0 10px;
 }
 .main-header .header-buttons {
     grid-column: 3;
@@ -93,7 +92,6 @@ body {
     grid-column: 1;
     justify-self: start;
 }
-
 
 #game-board { display: flex; flex-direction: column; justify-content: center; align-items: center; gap: 20px; }
 #game-board:fullscreen { background-color: var(--color-background); padding: 20px; box-sizing: border-box; }
@@ -123,13 +121,11 @@ body {
 .game-cell.ship { background-color: var(--color-cell-ship-guess); }
 .game-cell.revealed { background-color: var(--color-cell-revealed); }
 
-/* NEW: Animation for the hint flash */
 .game-cell.hint-flash { animation: hint-flash 1s ease-out; }
 @keyframes hint-flash {
     0%, 100% { box-shadow: 0 0 0 0px transparent; }
     50% { box-shadow: 0 0 0 4px var(--color-info) inset; }
 }
-
 
 .game-cell .ship-segment-icon {
     width: 100%;
@@ -207,3 +203,12 @@ button:disabled { background-color: var(--color-button-disabled-bg); cursor: not
 .icon-moon { display: none; }
 body.dark-mode .icon-sun { display: block; }
 body:not(.dark-mode) .icon-moon { display: block; }
+
+/* UPDATED: Media query for mobile button stacking */
+@media (max-width: 480px) {
+    .controls-grid {
+        grid-template-columns: 1fr;
+    }
+    .main-header h1 { font-size: 1.5em; }
+    .modal-content h2 { font-size: 2em; }
+}

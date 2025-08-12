@@ -73,6 +73,7 @@ function generatePuzzle() {
             puzzleConfigKey = `battleship-${gridSize}-${difficulty}`;
             ui.status.textContent = `Grid: ${gridSize}x${gridSize} | Difficulty: ${difficulty.charAt(0).toUpperCase() + difficulty.slice(1)}`;
             
+            checkSunkShips(); // Check for pre-sunk ships from hints
             updateGridDisplay();
             updateFleetDisplay();
             setUiLoading(false);
@@ -115,14 +116,14 @@ function updateGridDisplay() {
                 cell.textContent = colClues[c - 1];
                 cell.dataset.clueType = 'col';
                 cell.dataset.clueIndex = c - 1;
-                if (playerColCounts[c - 1] === colClues[c - 1]) cell.classList.add('satisfied');
+                if (playerColCounts[c - 1] === colClues[c - 1] && colClues[c-1] !== 0) cell.classList.add('satisfied');
                 if (disabledColClues.has(c - 1)) cell.classList.add('clue-disabled');
             } else if (c === 0 && r > 0) { // Row clues
                 cell.className = 'grid-cell clue-cell';
                 cell.textContent = rowClues[r - 1];
                 cell.dataset.clueType = 'row';
                 cell.dataset.clueIndex = r - 1;
-                if (playerRowCounts[r - 1] === rowClues[r - 1]) cell.classList.add('satisfied');
+                if (playerRowCounts[r - 1] === rowClues[r - 1] && rowClues[r-1] !== 0) cell.classList.add('satisfied');
                 if (disabledRowClues.has(r - 1)) cell.classList.add('clue-disabled');
             } else if (r > 0 && c > 0) { // Game cells
                 const gridR = r - 1;
@@ -186,7 +187,10 @@ function handleGameCellClick(cell) {
     const r = parseInt(cell.dataset.r);
     const c = parseInt(cell.dataset.c);
     
-    playerGrid[r][c] = (playerGrid[r][c] + 1) % 3; // Cycles 0, 1, 2
+    // Corrected cycle order: 0 (Empty) -> 1 (Water) -> 2 (Ship) -> 0
+    let currentState = playerGrid[r][c];
+    let nextState = (currentState + 1) % 3;
+    playerGrid[r][c] = nextState;
 
     checkSunkShips();
     updateGridDisplay();
@@ -216,18 +220,18 @@ function handleClueCellClick(cell) {
  * Provides a hint by revealing one incorrect cell's correct state.
  */
 function giveHint() {
-    const incorrectCells = [];
+    const emptyCells = [];
     for (let r = 0; r < gridSize; r++) {
         for (let c = 0; c < gridSize; c++) {
             if (playerGrid[r][c] === CELL_STATE.EMPTY) {
-                incorrectCells.push({r,c});
+                emptyCells.push({r, c});
             }
         }
     }
 
-    if (incorrectCells.length === 0) return;
+    if (emptyCells.length === 0) return;
 
-    const {r, c} = incorrectCells[Math.floor(Math.random() * incorrectCells.length)];
+    const {r, c} = emptyCells[Math.floor(Math.random() * emptyCells.length)];
     const cellElement = ui.gridContainer.querySelector(`[data-r='${r}'][data-c='${c}']`);
 
     if (cellElement) {
@@ -236,7 +240,7 @@ function giveHint() {
 
         setTimeout(() => {
             cellElement.classList.remove('hint-flash');
-            playerGrid[r][c] = solutionGrid[r][c] === SHIP_ID ? CELL_STATE.SHIP : CELL_STATE.WATER;
+            playerGrid[r][c] = solutionGrid[r][c] === SHIP_ID ? CELL_STATE.WATER : CELL_STATE.SHIP;
             
             checkSunkShips();
             updateGridDisplay();
@@ -252,35 +256,33 @@ function giveHint() {
  */
 function checkSunkShips() {
     sunkShipSegments.clear();
-    const playerShips = identifyShipsInGrid(playerGrid);
-    const solutionSignatures = new Set(ships.map(s => s.segments.map(seg => `${seg.r},${seg.c}`).sort().join(';')));
+    const playerShips = identifyShipsInGrid(playerGrid, true);
     
     for (const pShip of playerShips) {
-        const signature = pShip.segments.map(seg => `${seg.r},${seg.c}`).sort().join(';');
-        if (solutionSignatures.has(signature)) {
-            // It's a valid, sunk ship. Now determine parts.
-            if (pShip.length === 1) {
-                const {r, c} = pShip.segments[0];
-                sunkShipSegments.set(`${r},${c}`, { part: 'submarine', rotation: 0 });
-                continue;
-            }
+        if (pShip.length === 1) {
+            const {r, c} = pShip.segments[0];
+            sunkShipSegments.set(`${r},${c}`, { part: 'submarine', rotation: 0 });
+            continue;
+        }
 
-            const isVertical = pShip.segments.length > 1 && pShip.segments[0].c === pShip.segments[1].c;
-            const sortedSegments = pShip.segments.sort((a, b) => isVertical ? a.r - b.r : a.c - b.c);
+        const isVertical = pShip.segments.length > 1 && pShip.segments[0].c === pShip.segments[1].c;
+        const sortedSegments = pShip.segments.sort((a, b) => isVertical ? a.r - b.r : a.c - b.c);
 
-            // First segment is an end-cap
-            const {r: r1, c: c1} = sortedSegments[0];
-            sunkShipSegments.set(`${r1},${c1}`, { part: 'end', rotation: isVertical ? 0 : 270 });
-            
-            // Last segment is an end-cap
-            const {r: rL, c: cL} = sortedSegments[sortedSegments.length - 1];
-            sunkShipSegments.set(`${rL},${cL}`, { part: 'end', rotation: isVertical ? 180 : 90 });
+        // UPDATED ROTATION LOGIC
+        // Default icon is a right-pointing end-cap.
+        const firstEndRotation = isVertical ? 270 : 180; // Top or Left
+        const lastEndRotation = isVertical ? 90 : 0; // Bottom or Right
+        const middleRotation = isVertical ? 0 : 90; // Rectangles look same rotated
 
-            // Middle segments
-            for (let i = 1; i < sortedSegments.length - 1; i++) {
-                const {r, c} = sortedSegments[i];
-                sunkShipSegments.set(`${r},${c}`, { part: 'middle', rotation: isVertical ? 0 : 90 });
-            }
+        const {r: r1, c: c1} = sortedSegments[0];
+        sunkShipSegments.set(`${r1},${c1}`, { part: 'end', rotation: firstEndRotation });
+        
+        const {r: rL, c: cL} = sortedSegments[sortedSegments.length - 1];
+        sunkShipSegments.set(`${rL},${cL}`, { part: 'end', rotation: lastEndRotation });
+
+        for (let i = 1; i < sortedSegments.length - 1; i++) {
+            const {r, c} = sortedSegments[i];
+            sunkShipSegments.set(`${r},${c}`, { part: 'middle', rotation: middleRotation });
         }
     }
 }
@@ -301,7 +303,6 @@ function initEventListeners() {
     ui.fullscreenBtn.addEventListener('click', toggleFullScreen);
     ui.themeToggleBtn.addEventListener('click', () => setTheme(document.body.classList.contains('dark-mode') ? 'light' : 'dark'));
     
-    // Use a single listener on the container for efficiency
     ui.gridContainer.addEventListener('click', handleGridClick);
     
     document.addEventListener('keydown', (event) => {

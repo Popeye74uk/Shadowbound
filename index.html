@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Battleships Solo v0.2</title>
+    <title>Battleships Solo v0.3</title>
     <!-- Link to the external CSS file -->
     <link rel="stylesheet" href="battleship-style.css">
 </head>
@@ -53,24 +53,24 @@
         </div>
 
         <div id="instructions-container">
-            <p><b>How to Play:</b> Find the hidden fleet of ships. The numbers show how many ship segments are in each row and column. Ships cannot touch, even at the corners. Click a cell to cycle: Empty ➔ Ship ➔ Water.</p>
+            <p><b>How to Play:</b> Find the hidden fleet of ships. The numbers show how many ship segments are in each row and column. Ships cannot touch, even at the corners. Click a cell to cycle: Empty ➔ Water ➔ Ship.</p>
         </div>
         
         <div class="global-options-container" id="global-options-container">
             <div class="option-group">
                 <label for="grid-size-select"><b>Grid Size:</b></label>
                 <select id="grid-size-select">
-                    <option value="8">8x8</option>
-                    <option value="10" selected>10x10</option>
+                    <option value="8" selected>8x8</option>
+                    <option value="10">10x10</option>
                     <option value="12">12x12</option>
                 </select>
             </div>
             <div class="option-group">
                 <label for="difficulty-select"><b>Difficulty:</b></label>
                 <select id="difficulty-select">
-                    <option value="easy">Easy</option>
+                    <option value="easy" selected>Easy</option>
                     <option value="medium">Medium</option>
-                    <option value="hard" selected>Hard</option>
+                    <option value="hard">Hard</option>
                 </select>
             </div>
         </div>
