@@ -1,4 +1,4 @@
-/* NEW: Universal box-sizing rule for predictable layouts */
+/* Universal box-sizing rule for predictable layouts */
 *, *::before, *::after {
     box-sizing: border-box;
 }
@@ -104,7 +104,21 @@ body {
 #game-board:fullscreen { background-color: var(--color-background); padding: 20px; }
 
 #puzzle-container { position: relative; width: 100%; }
-#grid-container { display: grid; gap: 1px; background-color: var(--color-grid-lines); border: 1px solid var(--color-grid-lines); margin: 0 auto; }
+
+/* UPDATED: CSS-driven responsive grid */
+#grid-container {
+    display: grid;
+    gap: 1px;
+    background-color: var(--color-grid-lines);
+    border: 1px solid var(--color-grid-lines);
+    margin: 0 auto;
+    width: 100%;
+    /* Use CSS variable from JS to define the grid structure */
+    grid-template-columns: repeat(var(--grid-size, 9), 1fr);
+    /* Ensure the grid is a perfect square */
+    aspect-ratio: 1 / 1;
+}
+
 .grid-cell { background-color: var(--color-grid-cell-bg); user-select: none; transition: background-color 0.2s; position: relative; }
 
 .clue-cell {
@@ -115,6 +129,7 @@ body {
     align-items: center;
     cursor: pointer;
     transition: background-color 0.3s, color 0.3s;
+    font-size: clamp(0.7rem, 2.5vw, 1rem); /* Responsive font size */
 }
 .clue-cell.satisfied { background-color: var(--color-clue-satisfied); }
 .clue-cell.highlight, .game-cell.highlight {
