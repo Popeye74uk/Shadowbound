@@ -27,7 +27,7 @@
     --color-cell-water-guess: #d0e8ff;
     --color-cell-ship-guess: #ced4da;
     --color-cell-revealed: #ffc107;
-    --color-cell-revealed-fail: #e0cffc; /* NEW: Light purple for failed reveal */
+    --color-cell-revealed-fail: #e0cffc;
     --color-cell-revealed-text: #000;
     --color-clue-satisfied: #a3e9a4;
 }
@@ -52,7 +52,7 @@ body.dark-mode {
     /* Game-Specific Dark Colors */
     --color-cell-water-guess: #2a3b4a;
     --color-cell-ship-guess: #4a4a4a;
-    --color-cell-revealed-fail: #4a3b5a; /* NEW: Dark purple for failed reveal */
+    --color-cell-revealed-fail: #4a3b5a;
     --color-clue-satisfied: #2e6b30;
 }
 
@@ -120,7 +120,7 @@ body {
 .game-cell.water { background-color: var(--color-cell-water-guess); }
 .game-cell.ship { background-color: var(--color-cell-ship-guess); }
 .game-cell.revealed { background-color: var(--color-cell-revealed); }
-.game-cell.revealed-fail { background-color: var(--color-cell-revealed-fail); } /* NEW */
+.game-cell.revealed-fail { background-color: var(--color-cell-revealed-fail); }
 
 .game-cell.error-cell {
     box-shadow: 0 0 0 3px var(--color-error-flash) inset;
@@ -132,10 +132,9 @@ body {
     50% { box-shadow: 0 0 0 4px var(--color-info) inset; }
 }
 
-.game-cell.error-flash { animation: error-flash 0.5s ease-out; }
-@keyframes error-flash {
-    0%, 100% { box-shadow: none; }
-    50% { box-shadow: 0 0 0 4px var(--color-error-flash) inset; }
+/* UPDATED: Animation removed to make error permanent */
+.game-cell.error-flash { 
+    box-shadow: 0 0 0 3px var(--color-error-flash) inset;
 }
 
 .game-cell .ship-segment-icon {
