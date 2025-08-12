@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Battleships Solo v1.3</title>
+    <title>Battleships Solo v2.9</title>
     <!-- Link to the external CSS file -->
     <link rel="stylesheet" href="battleship-style.css">
 </head>
@@ -46,9 +46,10 @@
                     <span id="loader-text"></span>
                 </div>
             </div>
-            <div id="fleet-display">
+            <!-- Fleet display for fullscreen mode -->
+            <div id="fleet-display-fs" class="fullscreen-fleet">
                 <h3>Fleet</h3>
-                <ul id="fleet-list"></ul>
+                <ul id="fleet-list-fs"></ul>
             </div>
         </div>
 
@@ -56,6 +57,12 @@
             <p><b>How to Play:</b> Find the hidden fleet of ships. The numbers show how many ship segments are in each row and column. Ships cannot touch, even at the corners. Click a cell to cycle: Empty ➔ Water ➔ Ship.</p>
         </div>
         
+        <!-- Fleet display for normal view -->
+        <div id="fleet-display">
+            <h3>Fleet</h3>
+            <ul id="fleet-list"></ul>
+        </div>
+
         <div class="global-options-container" id="global-options-container">
             <div class="option-group">
                 <label for="grid-size-select"><b>Grid Size:</b></label>
@@ -81,8 +88,10 @@
 
         <div class="controls-grid" id="main-controls">
             <button id="generate-btn">New Puzzle</button>
+            <button id="finish-btn">End Puzzle</button>
+            <button id="undo-btn">Undo Move</button>
             <button id="hint-btn">Hint</button>
-            <button id="finish-btn">Finish</button>
+            <button id="check-btn">Check Puzzle</button>
             <button id="reveal-btn">Reveal Solution</button>
         </div>
 
