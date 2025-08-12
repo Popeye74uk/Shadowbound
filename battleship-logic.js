@@ -72,7 +72,7 @@ function generatePuzzle() {
 }
 
 /**
- * Renders the game grid. Icons are placeholders until the game is won.
+ * Renders the game grid.
  * @param {boolean} [isFinished=false] - If true, displays final ship icons.
  * @param {Array} [errorCells=[]] - A list of {r, c} objects to highlight as errors.
  * @param {boolean} [isFailedAttempt=false] - If true, uses a different color for revealed ships.
@@ -87,7 +87,9 @@ function updateGridDisplay(isFinished = false, errorCells = [], isFailedAttempt 
     ui.gridContainer.innerHTML = '';
     ui.gridContainer.style.gridTemplateColumns = `repeat(${fullGridSize}, ${cellSize}px)`;
     ui.gridContainer.style.gridTemplateRows = `repeat(${fullGridSize}, ${cellSize}px)`;
-    ui.gridContainer.style.width = `${fullGridSize * cellSize}px`;
+    
+    // BUG FIX: Removed the line that set a fixed width, which caused the overflow.
+    // ui.gridContainer.style.width = `${fullGridSize * cellSize}px`;
 
     const playerRowCounts = Array(gridSize).fill(0);
     const playerColCounts = Array(gridSize).fill(0);
@@ -190,10 +192,10 @@ function handleGameCellClick(cell) {
     let nextState = (currentState + 1) % 3;
     
     if (ui.mistakeModeCheckbox.checked && nextState === CELL_STATE.SHIP && solutionGrid[r][c] !== SHIP_ID) {
-        cell.classList.add('error-flash'); // Permanent red box in this mode
+        cell.classList.add('error-flash');
         return;
     }
-    cell.classList.remove('error-flash'); // Remove error if user corrects it
+    cell.classList.remove('error-flash');
 
     playerGrid[r][c] = nextState;
     updateGridDisplay();
@@ -218,7 +220,7 @@ function handleClueCellClick(cell) {
 }
 
 /**
- * UPDATED LOGIC: On success, triggers win. On failure, ends game and reveals solution with permanent error highlights.
+ * Checks the player's solution.
  */
 function checkSolution() {
     let isCorrect = true;
