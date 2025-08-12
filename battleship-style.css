@@ -228,32 +228,47 @@ body:not(.dark-mode) .icon-moon { display: block; }
 /* --- Fullscreen Enhancements --- */
 body.fullscreen-active .container {
     max-width: 100%;
-    height: 100%;
+    height: 100vh;
+    display: flex;
+    flex-direction: ;
 }
 #game-board:fullscreen {
     display: grid;
     grid-template-columns: 1fr auto 1fr;
     grid-template-rows: 1fr;
     align-items: center;
-    width: 100%;
-    height: 100%;
-    padding: 20px;
+    justify-items: center;
+    width: 100vw;
+    height: 100vh;
+    margin: 0;
+    padding: 0;
     box-sizing: border-box;
     background-color: var(--color-background);
 }
 #game-board:fullscreen .fullscreen-fleet {
-    display: block;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
     grid-column: 1;
-    justify-self: center;
-    align-self: center; /* This is the single, stable line added to fix vertical alignment. */
+    grid-row: 1;
+    height: 100%;
+    align-self: stretch;
 }
 #game-board:fullscreen #puzzle-container {
     grid-column: 2;
+    grid-row: 1
     width: auto;
     max-width: 85vh;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    height: 100%;
 }
 .fullscreen-fleet {
     display: none;
+
 }
 body.fullscreen-active .main-header,
 body.fullscreen-active #instructions-container,
