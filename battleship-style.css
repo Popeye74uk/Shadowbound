@@ -1,3 +1,8 @@
+/* NEW: Universal box-sizing rule for predictable layouts */
+*, *::before, *::after {
+    box-sizing: border-box;
+}
+
 /* CSS Variables for Theming */
 :root {
     --color-background: #f8f9fa;
@@ -96,7 +101,7 @@ body {
 }
 
 #game-board { display: flex; flex-direction: column; justify-content: center; align-items: center; gap: 20px; }
-#game-board:fullscreen { background-color: var(--color-background); padding: 20px; box-sizing: border-box; }
+#game-board:fullscreen { background-color: var(--color-background); padding: 20px; }
 
 #puzzle-container { position: relative; width: 100%; }
 #grid-container { display: grid; gap: 1px; background-color: var(--color-grid-lines); border: 1px solid var(--color-grid-lines); margin: 0 auto; }
@@ -132,7 +137,6 @@ body {
     50% { box-shadow: 0 0 0 4px var(--color-info) inset; }
 }
 
-/* UPDATED: Animation removed to make error permanent */
 .game-cell.error-flash { 
     box-shadow: 0 0 0 3px var(--color-error-flash) inset;
 }
@@ -193,7 +197,7 @@ body.dark-mode .loader { background-color: var(--color-background); }
 .checkbox-group label { cursor: pointer; }
 
 
-button { padding: 12px 20px; font-size: 1em; font-weight: bold; cursor: pointer; color: white; border: none; border-radius: 5px; transition: all 0.2s; box-shadow: 0 2px 4px var(--color-box-shadow); width: 100%; box-sizing: border-box; }
+button { padding: 12px 20px; font-size: 1em; font-weight: bold; cursor: pointer; color: white; border: none; border-radius: 5px; transition: all 0.2s; box-shadow: 0 2px 4px var(--color-box-shadow); width: 100%; }
 button:hover:not(:disabled) { transform: translateY(-2px); box-shadow: 0 4px 8px var(--color-box-shadow-hover); }
 button:disabled { background-color: var(--color-button-disabled-bg); cursor: not-allowed; opacity: 0.7; }
 #generate-btn { background-color: var(--color-primary); }
