@@ -21,16 +21,15 @@
     --color-success: #28a745;
     --color-danger: #dc3545;
     --color-warning: #fd7e14;
-    --color-info: #6f42c1; /* Hint color */
+    --color-info: #6f42c1;
     
     /* Game-Specific Colors */
     --color-cell-water-guess: #d0e8ff;
     --color-cell-ship-guess: #ced4da;
     --color-cell-revealed: #ffc107;
+    --color-cell-revealed-fail: #e0cffc; /* NEW: Light purple for failed reveal */
     --color-cell-revealed-text: #000;
     --color-clue-satisfied: #a3e9a4;
-    --color-clue-disabled-bg: #e9ecef;
-    --color-clue-disabled-text: #adb5bd;
 }
 
 body.dark-mode {
@@ -53,9 +52,8 @@ body.dark-mode {
     /* Game-Specific Dark Colors */
     --color-cell-water-guess: #2a3b4a;
     --color-cell-ship-guess: #4a4a4a;
+    --color-cell-revealed-fail: #4a3b5a; /* NEW: Dark purple for failed reveal */
     --color-clue-satisfied: #2e6b30;
-    --color-clue-disabled-bg: #343a40;
-    --color-clue-disabled-text: #6c757d;
 }
 
 body { 
@@ -114,11 +112,6 @@ body {
     transition: background-color 0.3s, color 0.3s;
 }
 .clue-cell.satisfied { background-color: var(--color-clue-satisfied); }
-.clue-cell.clue-disabled {
-    background-color: var(--color-clue-disabled-bg);
-    color: var(--color-clue-disabled-text);
-    text-decoration: line-through;
-}
 .clue-cell.highlight, .game-cell.highlight {
     background-color: var(--color-highlight-bg);
 }
@@ -127,6 +120,11 @@ body {
 .game-cell.water { background-color: var(--color-cell-water-guess); }
 .game-cell.ship { background-color: var(--color-cell-ship-guess); }
 .game-cell.revealed { background-color: var(--color-cell-revealed); }
+.game-cell.revealed-fail { background-color: var(--color-cell-revealed-fail); } /* NEW */
+
+.game-cell.error-cell {
+    box-shadow: 0 0 0 3px var(--color-error-flash) inset;
+}
 
 .game-cell.hint-flash { animation: hint-flash 1s ease-out; }
 @keyframes hint-flash {
@@ -145,7 +143,8 @@ body {
     height: 100%;
     fill: var(--color-heading);
 }
-.game-cell.revealed .ship-segment-icon {
+.game-cell.revealed .ship-segment-icon,
+.game-cell.revealed-fail .ship-segment-icon {
     fill: var(--color-cell-revealed-text);
 }
 .game-cell .ship-segment-placeholder {
@@ -187,7 +186,7 @@ body.dark-mode .loader { background-color: var(--color-background); }
     font-style: normal;
 }
 
-.controls-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 15px; width: 100%; margin: 25px auto 0 auto; }
+.controls-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 15px; width: 100%; margin: 25px auto 0 auto; }
 .global-options-container { display: flex; justify-content: center; align-items: center; gap: 10px 25px; margin-top: 25px; margin-bottom: -10px; font-size: 1em; color: var(--color-text-primary); flex-wrap: wrap; }
 .option-group { display: flex; align-items: center; gap: 10px; }
 .checkbox-group { gap: 6px; }
@@ -199,8 +198,9 @@ button { padding: 12px 20px; font-size: 1em; font-weight: bold; cursor: pointer;
 button:hover:not(:disabled) { transform: translateY(-2px); box-shadow: 0 4px 8px var(--color-box-shadow-hover); }
 button:disabled { background-color: var(--color-button-disabled-bg); cursor: not-allowed; opacity: 0.7; }
 #generate-btn { background-color: var(--color-primary); }
-#reveal-btn { background-color: var(--color-success); }
+#reveal-btn { background-color: var(--color-danger); }
 #hint-btn { background-color: var(--color-info); }
+#finish-btn { background-color: var(--color-warning); }
 
 #status-container { text-align: center; margin-top: 15px; font-style: italic; min-height: 20px; color: var(--color-text-secondary); }
 
@@ -224,7 +224,10 @@ body:not(.dark-mode) .icon-moon { display: block; }
 
 @media (max-width: 480px) {
     .controls-grid {
-        grid-template-columns: 1fr;
+        grid-template-columns: 1fr 1fr;
+    }
+    #generate-btn, #reveal-btn {
+        grid-column: 1 / -1;
     }
     .main-header h1 { font-size: 1.5em; }
     .modal-content h2 { font-size: 2em; }
