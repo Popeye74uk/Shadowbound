@@ -3,14 +3,28 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Battleships Solo v0.1</title>
+    <title>Battleships Solo v0.2</title>
     <!-- Link to the external CSS file -->
     <link rel="stylesheet" href="battleship-style.css">
 </head>
 <body>
+    <!-- Hidden SVG definitions for ship parts -->
+    <svg style="display: none;">
+        <defs>
+            <g id="ship-submarine">
+                <rect x="2" y="2" width="12" height="12" rx="6"/>
+            </g>
+            <g id="ship-middle">
+                <rect x="2" y="2" width="12" height="12"/>
+            </g>
+            <g id="ship-end">
+                <path d="M8,2 A6,6 0 0 1 8,14 L2,14 L2,2 Z"/>
+            </g>
+        </defs>
+    </svg>
+
     <div class="container">
         <header class="main-header">
-            <!-- This spacer is used for layout alignment with the grid system -->
             <div class="header-spacer"></div>
             <h1>Battleships Solo</h1>
             <div class="header-buttons">
@@ -68,7 +82,6 @@
         </div>
 
         <div id="status-container"><p id="source-status"></p></div>
-        <div id="version-info">v1.1</div>
     </div>
 
     <div id="completion-modal">
@@ -83,7 +96,6 @@
         </div>
     </div>
     
-    <!-- Link to the external JavaScript file -->
     <script src="battleship-logic.js"></script>
 </body>
 </html>
