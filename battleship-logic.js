@@ -126,6 +126,9 @@ function updateGridDisplay(isFinished = false, errorCells = [], isFailedAttempt 
                 cell.dataset.r = gridR;
                 cell.dataset.c = gridC;
                 if (isHighlighted) cell.classList.add('highlight');
+                if (errorCells.some(e => e.r === gridR && e.c === gridC)) {
+                    cell.classList.add('error-cell');
+                }
                 
                 const state = playerGrid[gridR][gridC];
                 if (state === CELL_STATE.WATER) {
@@ -160,6 +163,7 @@ function updateGridDisplay(isFinished = false, errorCells = [], isFailedAttempt 
         }
     }
 }
+
 
 /**
  * Handles clicks on any cell in the grid container.
@@ -215,32 +219,39 @@ function handleClueCellClick(cell) {
 }
 
 /**
- * Checks the player's solution. On success, it triggers the win condition.
- * On failure, it ends the game and reveals the correct solution in purple.
+ * NEW LOGIC: Checks the player's solution. On success, triggers the win pop-up.
+ * On failure, it ends the game and reveals the correct solution with mistakes highlighted.
  */
 function checkSolution() {
     let isCorrect = true;
+    const errorCells = [];
+
     for (let r = 0; r < gridSize; r++) {
         for (let c = 0; c < gridSize; c++) {
-            const playerState = playerGrid[r][c] === CELL_STATE.SHIP ? SHIP_ID : 0;
-            const solutionState = solutionGrid[r][c];
-            if (playerState !== solutionState) {
+            const playerAnswer = playerGrid[r][c] === CELL_STATE.SHIP ? SHIP_ID : 0;
+            const solutionAnswer = solutionGrid[r][c];
+
+            if (playerAnswer !== solutionAnswer) {
                 isCorrect = false;
-                break;
+                errorCells.push({ r, c });
             }
         }
-        if (!isCorrect) break;
     }
 
+    startTime = null; // Game ends regardless of outcome
+    ui.finishBtn.disabled = true;
+    ui.hintBtn.disabled = true;
+
     if (isCorrect) {
-        const elapsedTime = Date.now() - startTime;
-        startTime = null; // Stop timer
+        const elapsedTime = Date.now() - (startTime || Date.now());
         handlePuzzleCompletion(elapsedTime);
-        updateGridDisplay(true); // Redraw with final ship icons
+        updateGridDisplay(true, [], false); // Redraw with final ship icons (success)
         updateFleetDisplay(true);
     } else {
-        // On failure, end the game and show the solution in a different color
-        revealSolution(true); // Pass true to indicate a failed attempt
+        // On failure, show the correct solution in purple with red borders on errors
+        playerGrid = solutionGrid.map(row => row.map(cell => cell === SHIP_ID ? CELL_STATE.SHIP : CELL_STATE.WATER));
+        updateGridDisplay(true, errorCells, true); // Redraw with final icons (fail)
+        updateFleetDisplay(true); // Mark ships as found
     }
 }
 
@@ -250,7 +261,7 @@ function checkSolution() {
 function initEventListeners() {
     ui.generateBtn.addEventListener('click', generatePuzzle);
     ui.hintBtn.addEventListener('click', giveHint);
-    ui.revealBtn.addEventListener('click', () => revealSolution(false)); // Standard reveal
+    ui.revealBtn.addEventListener('click', () => revealSolution(false));
     ui.finishBtn.addEventListener('click', checkSolution);
     ui.playAgainBtn.addEventListener('click', generatePuzzle);
     ui.completionModal.addEventListener('click', hideCompletionModal);
@@ -422,6 +433,10 @@ function updateFleetDisplay(isFinished = false) {
     });
 }
 
+/**
+ * BUG FIX: This function now correctly passes the isFinished=true flag
+ * to ensure the final ship icons are drawn.
+ */
 function revealSolution(isFailedAttempt = false) {
     if (!solutionGrid) return;
     startTime = null;
@@ -456,6 +471,31 @@ function getSunkShipSegments() {
         }
     }
     return segments;
+}
+
+function giveHint() {
+    const emptyCells = [];
+    for (let r = 0; r < gridSize; r++) {
+        for (let c = 0; c < gridSize; c++) {
+            if (playerGrid[r][c] === CELL_STATE.EMPTY) {
+                emptyCells.push({r, c});
+            }
+        }
+    }
+    if (emptyCells.length === 0) return;
+    const {r, c} = emptyCells[Math.floor(Math.random() * emptyCells.length)];
+    const cellElement = ui.gridContainer.querySelector(`[data-r='${r}'][data-c='${c}']`);
+    if (cellElement) {
+        cellElement.classList.add('hint-flash');
+        ui.hintBtn.disabled = true;
+        setTimeout(() => {
+            cellElement.classList.remove('hint-flash');
+            playerGrid[r][c] = solutionGrid[r][c] === SHIP_ID ? CELL_STATE.SHIP : CELL_STATE.WATER;
+            updateGridDisplay();
+            updateFleetDisplay();
+            if (startTime) ui.hintBtn.disabled = false;
+        }, 1000);
+    }
 }
 
 function formatTime(milliseconds) { const s = Math.floor(milliseconds / 1000); return `${String(Math.floor(s/60)).padStart(2,'0')}:${String(s%60).padStart(2,'0')}`; }
