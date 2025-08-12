@@ -7,6 +7,8 @@
     --color-heading: #343a40;
     --color-grid-lines: #adb5bd;
     --color-grid-cell-bg: #fff;
+    --color-highlight-bg: #e9f5ff;
+    --color-error-flash: #dc3545;
     --color-button-disabled-bg: #6c757d;
     --color-spinner-track: #f3f3f3;
     --color-modal-bg: rgba(0, 0, 0, 0.6);
@@ -39,6 +41,8 @@ body.dark-mode {
     --color-heading: #f1f1f1;
     --color-grid-lines: #444;
     --color-grid-cell-bg: #2a2a2a;
+    --color-highlight-bg: #222c38;
+    --color-error-flash: #ff4d4d;
     --color-button-disabled-bg: #555;
     --color-spinner-track: #444;
     --color-modal-bg: rgba(0, 0, 0, 0.8);
@@ -115,6 +119,9 @@ body {
     color: var(--color-clue-disabled-text);
     text-decoration: line-through;
 }
+.clue-cell.highlight, .game-cell.highlight {
+    background-color: var(--color-highlight-bg);
+}
 
 .game-cell { cursor: pointer; }
 .game-cell.water { background-color: var(--color-cell-water-guess); }
@@ -125,6 +132,12 @@ body {
 @keyframes hint-flash {
     0%, 100% { box-shadow: 0 0 0 0px transparent; }
     50% { box-shadow: 0 0 0 4px var(--color-info) inset; }
+}
+
+.game-cell.error-flash { animation: error-flash 0.5s ease-out; }
+@keyframes error-flash {
+    0%, 100% { box-shadow: none; }
+    50% { box-shadow: 0 0 0 4px var(--color-error-flash) inset; }
 }
 
 .game-cell .ship-segment-icon {
@@ -177,6 +190,11 @@ body.dark-mode .loader { background-color: var(--color-background); }
 .controls-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 15px; width: 100%; margin: 25px auto 0 auto; }
 .global-options-container { display: flex; justify-content: center; align-items: center; gap: 10px 25px; margin-top: 25px; margin-bottom: -10px; font-size: 1em; color: var(--color-text-primary); flex-wrap: wrap; }
 .option-group { display: flex; align-items: center; gap: 10px; }
+.checkbox-group { gap: 6px; }
+.checkbox-group input { width: 18px; height: 18px; cursor: pointer;}
+.checkbox-group label { cursor: pointer; }
+
+
 button { padding: 12px 20px; font-size: 1em; font-weight: bold; cursor: pointer; color: white; border: none; border-radius: 5px; transition: all 0.2s; box-shadow: 0 2px 4px var(--color-box-shadow); width: 100%; box-sizing: border-box; }
 button:hover:not(:disabled) { transform: translateY(-2px); box-shadow: 0 4px 8px var(--color-box-shadow-hover); }
 button:disabled { background-color: var(--color-button-disabled-bg); cursor: not-allowed; opacity: 0.7; }
@@ -204,7 +222,6 @@ button:disabled { background-color: var(--color-button-disabled-bg); cursor: not
 body.dark-mode .icon-sun { display: block; }
 body:not(.dark-mode) .icon-moon { display: block; }
 
-/* UPDATED: Media query for mobile button stacking */
 @media (max-width: 480px) {
     .controls-grid {
         grid-template-columns: 1fr;
