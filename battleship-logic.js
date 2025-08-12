@@ -164,7 +164,6 @@ function updateGridDisplay(isFinished = false, errorCells = [], isFailedAttempt 
     }
 }
 
-
 /**
  * Handles clicks on any cell in the grid container.
  */
@@ -219,7 +218,7 @@ function handleClueCellClick(cell) {
 }
 
 /**
- * NEW LOGIC: Checks the player's solution. On success, triggers the win pop-up.
+ * Checks the player's solution. On success, triggers the win pop-up.
  * On failure, it ends the game and reveals the correct solution with mistakes highlighted.
  */
 function checkSolution() {
@@ -230,7 +229,6 @@ function checkSolution() {
         for (let c = 0; c < gridSize; c++) {
             const playerAnswer = playerGrid[r][c] === CELL_STATE.SHIP ? SHIP_ID : 0;
             const solutionAnswer = solutionGrid[r][c];
-
             if (playerAnswer !== solutionAnswer) {
                 isCorrect = false;
                 errorCells.push({ r, c });
@@ -238,20 +236,52 @@ function checkSolution() {
         }
     }
 
-    startTime = null; // Game ends regardless of outcome
+    startTime = null;
     ui.finishBtn.disabled = true;
     ui.hintBtn.disabled = true;
 
     if (isCorrect) {
         const elapsedTime = Date.now() - (startTime || Date.now());
         handlePuzzleCompletion(elapsedTime);
-        updateGridDisplay(true, [], false); // Redraw with final ship icons (success)
+        updateGridDisplay(true, [], false);
         updateFleetDisplay(true);
     } else {
-        // On failure, show the correct solution in purple with red borders on errors
         playerGrid = solutionGrid.map(row => row.map(cell => cell === SHIP_ID ? CELL_STATE.SHIP : CELL_STATE.WATER));
-        updateGridDisplay(true, errorCells, true); // Redraw with final icons (fail)
-        updateFleetDisplay(true); // Mark ships as found
+        updateGridDisplay(true, errorCells, true);
+        updateFleetDisplay(true);
+    }
+}
+
+/**
+ * Provides a hint by revealing one correct cell's state.
+ */
+function giveHint() {
+    // NEW: Scroll into view on mobile
+    if (window.innerWidth < 768) {
+        ui.puzzleContainer.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
+
+    const emptyCells = [];
+    for (let r = 0; r < gridSize; r++) {
+        for (let c = 0; c < gridSize; c++) {
+            if (playerGrid[r][c] === CELL_STATE.EMPTY) {
+                emptyCells.push({r, c});
+            }
+        }
+    }
+    if (emptyCells.length === 0) return;
+    const {r, c} = emptyCells[Math.floor(Math.random() * emptyCells.length)];
+    const cellElement = ui.gridContainer.querySelector(`[data-r='${r}'][data-c='${c}']`);
+    if (cellElement) {
+        cellElement.classList.add('hint-flash');
+        ui.hintBtn.disabled = true;
+        setTimeout(() => {
+            cellElement.classList.remove('hint-flash');
+            playerGrid[r][c] = solutionGrid[r][c] === SHIP_ID ? CELL_STATE.SHIP : CELL_STATE.WATER;
+            updateGridDisplay();
+            updateFleetDisplay();
+            if (startTime) ui.hintBtn.disabled = false;
+        }, 1000);
     }
 }
 
@@ -433,10 +463,6 @@ function updateFleetDisplay(isFinished = false) {
     });
 }
 
-/**
- * BUG FIX: This function now correctly passes the isFinished=true flag
- * to ensure the final ship icons are drawn.
- */
 function revealSolution(isFailedAttempt = false) {
     if (!solutionGrid) return;
     startTime = null;
@@ -471,31 +497,6 @@ function getSunkShipSegments() {
         }
     }
     return segments;
-}
-
-function giveHint() {
-    const emptyCells = [];
-    for (let r = 0; r < gridSize; r++) {
-        for (let c = 0; c < gridSize; c++) {
-            if (playerGrid[r][c] === CELL_STATE.EMPTY) {
-                emptyCells.push({r, c});
-            }
-        }
-    }
-    if (emptyCells.length === 0) return;
-    const {r, c} = emptyCells[Math.floor(Math.random() * emptyCells.length)];
-    const cellElement = ui.gridContainer.querySelector(`[data-r='${r}'][data-c='${c}']`);
-    if (cellElement) {
-        cellElement.classList.add('hint-flash');
-        ui.hintBtn.disabled = true;
-        setTimeout(() => {
-            cellElement.classList.remove('hint-flash');
-            playerGrid[r][c] = solutionGrid[r][c] === SHIP_ID ? CELL_STATE.SHIP : CELL_STATE.WATER;
-            updateGridDisplay();
-            updateFleetDisplay();
-            if (startTime) ui.hintBtn.disabled = false;
-        }, 1000);
-    }
 }
 
 function formatTime(milliseconds) { const s = Math.floor(milliseconds / 1000); return `${String(Math.floor(s/60)).padStart(2,'0')}:${String(s%60).padStart(2,'0')}`; }
