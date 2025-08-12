@@ -57,7 +57,6 @@ function generatePuzzle() {
     hideCompletionModal();
     initNewPuzzleState();
     
-    // Using a minimal timeout to ensure the DOM is painted before we measure it
     setTimeout(() => {
         try {
             const puzzleData = generatePuzzleData();
@@ -65,14 +64,7 @@ function generatePuzzle() {
             ships = puzzleData.ships;
             rowClues = puzzleData.rowClues;
             colClues = puzzleData.colClues;
-            
-            playerGrid = Array(gridSize).fill(0).map(() => Array(gridSize).fill(CELL_STATE.EMPTY));
-            
-            autoFillZeros();
-            
-            puzzleData.initialHints.forEach(hint => {
-                playerGrid[hint.r][hint.c] = hint.type === 'ship' ? CELL_STATE.SHIP : CELL_STATE.WATER;
-            });
+            playerGrid = puzzleData.playerGrid; // Use the grid created in generatePuzzleData
 
             puzzleConfigKey = `battleship-${gridSize}-${difficulty}`;
             ui.status.textContent = `Grid: ${gridSize}x${gridSize} | Difficulty: ${difficulty.charAt(0).toUpperCase() + difficulty.slice(1)}`;
@@ -85,27 +77,7 @@ function generatePuzzle() {
             ui.status.textContent = `Error: ${error.message}`;
             setUiLoading(false);
         }
-    }, 10); // A very short delay is enough
-}
-
-/**
- * Iterates through clues and fills all '0' rows/cols with water.
- */
-function autoFillZeros() {
-    rowClues.forEach((clue, r) => {
-        if (clue === 0) {
-            for (let c = 0; c < gridSize; c++) {
-                playerGrid[r][c] = CELL_STATE.WATER;
-            }
-        }
-    });
-    colClues.forEach((clue, c) => {
-        if (clue === 0) {
-            for (let r = 0; r < gridSize; r++) {
-                playerGrid[r][c] = CELL_STATE.WATER;
-            }
-        }
-    });
+    }, 10);
 }
 
 /**
@@ -113,7 +85,7 @@ function autoFillZeros() {
  */
 function updateGridDisplay() {
     const containerWidth = ui.puzzleContainer.clientWidth;
-    if (containerWidth === 0) return; // Safeguard against invisible container
+    if (containerWidth === 0) return;
 
     const fullGridSize = gridSize + 1;
     const cellSize = Math.floor(containerWidth / fullGridSize);
@@ -184,7 +156,7 @@ function updateGridDisplay() {
                     }
                 }
             } else {
-                cell.className = 'grid-cell'; // Corner cell
+                cell.className = 'grid-cell';
             }
             ui.gridContainer.appendChild(cell);
         }
@@ -216,16 +188,13 @@ function handleGameCellClick(cell) {
     const r = parseInt(cell.dataset.r);
     const c = parseInt(cell.dataset.c);
     
-    // Cycle order: 0 (Empty) -> 1 (Water) -> 2 (Ship) -> 0
     let currentState = playerGrid[r][c];
     let nextState = (currentState + 1) % 3;
     
-    // If mistake mode is on, check before placing a ship
     if (ui.mistakeModeCheckbox.checked && nextState === CELL_STATE.SHIP && solutionGrid[r][c] !== SHIP_ID) {
         cell.classList.add('error-flash');
-        // Do not update the grid state, effectively canceling the move
         setTimeout(() => cell.classList.remove('error-flash'), 500);
-        return; // Stop the function here
+        return;
     }
 
     playerGrid[r][c] = nextState;
@@ -283,7 +252,6 @@ function giveHint() {
 
         setTimeout(() => {
             cellElement.classList.remove('hint-flash');
-            // BUG FIX: Correctly set the cell to SHIP or WATER based on the solution
             playerGrid[r][c] = solutionGrid[r][c] === SHIP_ID ? CELL_STATE.SHIP : CELL_STATE.WATER;
             
             const newSunkShips = checkSunkShips();
@@ -376,11 +344,10 @@ window.addEventListener('load', () => {
     if (isMobile) { ui.fullscreenBtn.style.display = 'none'; }
     
     initEventListeners();
-    // BUG FIX: Wrap initial puzzle generation in a timeout to ensure DOM is ready
     setTimeout(generatePuzzle, 0);
 });
 
-// --- Utility and Helper functions (mostly unchanged) ---
+// --- Utility and Helper functions ---
 
 function updatePuzzleParameters() {
     gridSize = parseInt(ui.gridSizeSelect.value, 10);
@@ -433,6 +400,10 @@ function placeShipsOnGrid() {
     return { grid, ships: placedShips };
 }
 
+/**
+ * BUG FIX: This function now creates and returns the playerGrid as well,
+ * after filling zeros, so that the hints can be placed correctly.
+ */
 function generatePuzzleData() {
     updatePuzzleParameters();
     let placedShips;
@@ -450,6 +421,7 @@ function generatePuzzleData() {
     if (!placedShips) {
          throw new Error(`Failed to generate a valid puzzle board after ${attempts} attempts.`);
     }
+
     const rClues = Array(gridSize).fill(0);
     const cClues = Array(gridSize).fill(0);
     for (let r = 0; r < gridSize; r++) {
@@ -460,25 +432,48 @@ function generatePuzzleData() {
             }
         }
     }
+
+    // Create the player grid here
+    const tempPlayerGrid = Array(gridSize).fill(0).map(() => Array(gridSize).fill(CELL_STATE.EMPTY));
+    rClues.forEach((clue, r) => {
+        if (clue === 0) {
+            for (let c = 0; c < gridSize; c++) tempPlayerGrid[r][c] = CELL_STATE.WATER;
+        }
+    });
+    cClues.forEach((clue, c) => {
+        if (clue === 0) {
+            for (let r = 0; r < gridSize; r++) tempPlayerGrid[r][c] = CELL_STATE.WATER;
+        }
+    });
+    
+    // Now place hints, ensuring not to overwrite auto-filled water
     const initialHints = [];
     const hintCount = fleetConfig.hints[difficulty];
     const possibleHintCells = [];
     for (let r=0; r < gridSize; r++) {
         for (let c=0; c < gridSize; c++) {
-            possibleHintCells.push({r, c});
+            if (tempPlayerGrid[r][c] === CELL_STATE.EMPTY) { // Only pick from empty cells
+                possibleHintCells.push({r, c});
+            }
         }
     }
+
     possibleHintCells.sort(() => 0.5 - Math.random());
     for(let i=0; i < hintCount && i < possibleHintCells.length; i++) {
         const {r, c} = possibleHintCells[i];
-        if (playerGrid[r][c] === CELL_STATE.EMPTY) { // Only add hints to non-zero-filled cells
-            initialHints.push({ r, c, type: grid[r][c] === SHIP_ID ? 'ship' : 'water' });
-        }
+        initialHints.push({ r, c, type: grid[r][c] === SHIP_ID ? 'ship' : 'water' });
     }
+
+    // Apply the hints to the grid we're returning
+    initialHints.forEach(hint => {
+        tempPlayerGrid[hint.r][hint.c] = hint.type === 'ship' ? CELL_STATE.SHIP : CELL_STATE.WATER;
+    });
+
     return {
-        gridSize, fleet: fleetConfig.ships, solutionGrid: grid, ships: placedShips, rowClues: rClues, colClues: cClues, initialHints
+        gridSize, fleet: fleetConfig.ships, solutionGrid: grid, ships: placedShips, rowClues: rClues, colClues: cClues, playerGrid: tempPlayerGrid
     };
 }
+
 
 function setUiLoading(isLoading, message = '') {
     document.querySelectorAll('button, input, select').forEach(el => el.disabled = isLoading);
