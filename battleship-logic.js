@@ -78,11 +78,16 @@ function generatePuzzle() {
  * @param {boolean} [isFailedAttempt=false] - If true, uses a different color for revealed ships.
  */
 function updateGridDisplay(isFinished = false, errorCells = [], isFailedAttempt = false) {
-    const fullGridSize = gridSize + 1;
+    const containerWidth = ui.puzzleContainer.clientWidth;
+    if (containerWidth === 0) return;
 
-    // BUG FIX: Set the grid size via CSS variable instead of direct style manipulation
-    ui.gridContainer.style.setProperty('--grid-size', fullGridSize);
+    const fullGridSize = gridSize + 1;
+    const cellSize = Math.floor(containerWidth / fullGridSize);
+
     ui.gridContainer.innerHTML = '';
+    ui.gridContainer.style.gridTemplateColumns = `repeat(${fullGridSize}, ${cellSize}px)`;
+    ui.gridContainer.style.gridTemplateRows = `repeat(${fullGridSize}, ${cellSize}px)`;
+    ui.gridContainer.style.width = `${fullGridSize * cellSize}px`;
 
     const playerRowCounts = Array(gridSize).fill(0);
     const playerColCounts = Array(gridSize).fill(0);
@@ -185,10 +190,10 @@ function handleGameCellClick(cell) {
     let nextState = (currentState + 1) % 3;
     
     if (ui.mistakeModeCheckbox.checked && nextState === CELL_STATE.SHIP && solutionGrid[r][c] !== SHIP_ID) {
-        cell.classList.add('error-flash');
+        cell.classList.add('error-flash'); // Permanent red box in this mode
         return;
     }
-    cell.classList.remove('error-flash');
+    cell.classList.remove('error-flash'); // Remove error if user corrects it
 
     playerGrid[r][c] = nextState;
     updateGridDisplay();
@@ -213,7 +218,7 @@ function handleClueCellClick(cell) {
 }
 
 /**
- * Checks the player's solution.
+ * UPDATED LOGIC: On success, triggers win. On failure, ends game and reveals solution with permanent error highlights.
  */
 function checkSolution() {
     let isCorrect = true;
@@ -230,12 +235,12 @@ function checkSolution() {
         }
     }
 
-    const elapsedTime = Date.now() - (startTime || Date.now());
     startTime = null;
     ui.finishBtn.disabled = true;
     ui.hintBtn.disabled = true;
 
     if (isCorrect) {
+        const elapsedTime = Date.now() - (startTime || Date.now());
         handlePuzzleCompletion(elapsedTime);
         updateGridDisplay(true, [], false);
         updateFleetDisplay(true);
