@@ -57,6 +57,7 @@ function generatePuzzle() {
     hideCompletionModal();
     initNewPuzzleState();
     
+    // Using a minimal timeout to ensure the DOM is painted before we measure it
     setTimeout(() => {
         try {
             const puzzleData = generatePuzzleData();
@@ -67,10 +68,8 @@ function generatePuzzle() {
             
             playerGrid = Array(gridSize).fill(0).map(() => Array(gridSize).fill(CELL_STATE.EMPTY));
             
-            // NEW: Automatically fill zero clues
             autoFillZeros();
             
-            // Place initial hints from the difficulty setting
             puzzleData.initialHints.forEach(hint => {
                 playerGrid[hint.r][hint.c] = hint.type === 'ship' ? CELL_STATE.SHIP : CELL_STATE.WATER;
             });
@@ -86,11 +85,11 @@ function generatePuzzle() {
             ui.status.textContent = `Error: ${error.message}`;
             setUiLoading(false);
         }
-    }, 50);
+    }, 10); // A very short delay is enough
 }
 
 /**
- * NEW: Iterates through clues and fills all '0' rows/cols with water.
+ * Iterates through clues and fills all '0' rows/cols with water.
  */
 function autoFillZeros() {
     rowClues.forEach((clue, r) => {
@@ -114,6 +113,8 @@ function autoFillZeros() {
  */
 function updateGridDisplay() {
     const containerWidth = ui.puzzleContainer.clientWidth;
+    if (containerWidth === 0) return; // Safeguard against invisible container
+
     const fullGridSize = gridSize + 1;
     const cellSize = Math.floor(containerWidth / fullGridSize);
 
@@ -218,16 +219,17 @@ function handleGameCellClick(cell) {
     // Cycle order: 0 (Empty) -> 1 (Water) -> 2 (Ship) -> 0
     let currentState = playerGrid[r][c];
     let nextState = (currentState + 1) % 3;
-    playerGrid[r][c] = nextState;
     
-    // NEW: Error Checking
+    // If mistake mode is on, check before placing a ship
     if (ui.mistakeModeCheckbox.checked && nextState === CELL_STATE.SHIP && solutionGrid[r][c] !== SHIP_ID) {
         cell.classList.add('error-flash');
-        playerGrid[r][c] = CELL_STATE.EMPTY; // Revert mistake immediately
+        // Do not update the grid state, effectively canceling the move
         setTimeout(() => cell.classList.remove('error-flash'), 500);
+        return; // Stop the function here
     }
 
-    // NEW: Automatic water filling on sunk ships
+    playerGrid[r][c] = nextState;
+
     const newSunkShips = checkSunkShips();
     if (newSunkShips) {
         autoFillWaterAroundSunkShips();
@@ -256,10 +258,49 @@ function handleClueCellClick(cell) {
     updateGridDisplay();
 }
 
+
 /**
- * Scans the player grid, compares to solution, populates the sunkShipSegments map,
- * and returns true if a new ship was just sunk.
- * @returns {boolean} True if the number of sunk ships increased.
+ * Provides a hint by revealing one correct cell's state.
+ */
+function giveHint() {
+    const emptyCells = [];
+    for (let r = 0; r < gridSize; r++) {
+        for (let c = 0; c < gridSize; c++) {
+            if (playerGrid[r][c] === CELL_STATE.EMPTY) {
+                emptyCells.push({r, c});
+            }
+        }
+    }
+
+    if (emptyCells.length === 0) return;
+
+    const {r, c} = emptyCells[Math.floor(Math.random() * emptyCells.length)];
+    const cellElement = ui.gridContainer.querySelector(`[data-r='${r}'][data-c='${c}']`);
+
+    if (cellElement) {
+        cellElement.classList.add('hint-flash');
+        ui.hintBtn.disabled = true;
+
+        setTimeout(() => {
+            cellElement.classList.remove('hint-flash');
+            // BUG FIX: Correctly set the cell to SHIP or WATER based on the solution
+            playerGrid[r][c] = solutionGrid[r][c] === SHIP_ID ? CELL_STATE.SHIP : CELL_STATE.WATER;
+            
+            const newSunkShips = checkSunkShips();
+            if (newSunkShips) {
+                autoFillWaterAroundSunkShips();
+            }
+            updateGridDisplay();
+            updateFleetDisplay();
+            checkWinCondition();
+            if (startTime) ui.hintBtn.disabled = false;
+        }, 1000);
+    }
+}
+
+/**
+ * Scans the player grid, compares to solution, and populates the sunkShipSegments map.
+ * @returns {boolean} True if the number of sunk ships increased since the last check.
  */
 function checkSunkShips() {
     const initialSunkCount = sunkShipSegments.size;
@@ -267,13 +308,12 @@ function checkSunkShips() {
     const playerShips = identifyShipsInGrid(playerGrid, true);
     
     for (const pShip of playerShips) {
-        // ... (logic for ship parts, same as before) ...
         if (pShip.length === 1) {
             const {r, c} = pShip.segments[0];
             sunkShipSegments.set(`${r},${c}`, { part: 'submarine', rotation: 0 });
             continue;
         }
-        const isVertical = pShip.segments[0].c === pShip.segments[1].c;
+        const isVertical = pShip.segments.length > 1 && pShip.segments[0].c === pShip.segments[1].c;
         const sortedSegments = pShip.segments.sort((a, b) => isVertical ? a.r - b.r : a.c - b.c);
         const firstEndRotation = isVertical ? 270 : 180;
         const lastEndRotation = isVertical ? 90 : 0;
@@ -291,7 +331,7 @@ function checkSunkShips() {
 }
 
 /**
- * NEW: Places water tiles in all 8 directions around all sunk ship segments.
+ * Places water tiles in all 8 directions around all sunk ship segments.
  */
 function autoFillWaterAroundSunkShips() {
     for (const key of sunkShipSegments.keys()) {
@@ -326,16 +366,6 @@ function initEventListeners() {
     ui.fullscreenBtn.addEventListener('click', toggleFullScreen);
     ui.themeToggleBtn.addEventListener('click', () => setTheme(document.body.classList.contains('dark-mode') ? 'light' : 'dark'));
     ui.gridContainer.addEventListener('click', handleGridClick);
-    
-    document.addEventListener('keydown', (event) => {
-        const activeEl = document.activeElement;
-        if (activeEl && (activeEl.tagName === 'INPUT' || activeEl.tagName === 'TEXTAREA')) return;
-        const key = event.key.toLowerCase();
-        if (key === 'h' && !ui.hintBtn.disabled) { event.preventDefault(); giveHint(); } 
-        else if (key === 'f') { event.preventDefault(); toggleFullScreen(); } 
-        else if (key === 'n') { event.preventDefault(); generatePuzzle(); } 
-        else if (key === 'r' && !ui.revealBtn.disabled) { event.preventDefault(); revealSolution(); }
-    });
 }
 
 window.addEventListener('load', () => {
@@ -344,12 +374,13 @@ window.addEventListener('load', () => {
     setTheme(savedTheme || (prefersDark ? 'dark' : 'light'));
     const isMobile = /Mobi/i.test(navigator.userAgent);
     if (isMobile) { ui.fullscreenBtn.style.display = 'none'; }
+    
     initEventListeners();
-    generatePuzzle();
+    // BUG FIX: Wrap initial puzzle generation in a timeout to ensure DOM is ready
+    setTimeout(generatePuzzle, 0);
 });
 
-// --- Utility and Helper functions ---
-// (The following functions are unchanged but are required for the game to run)
+// --- Utility and Helper functions (mostly unchanged) ---
 
 function updatePuzzleParameters() {
     gridSize = parseInt(ui.gridSizeSelect.value, 10);
@@ -440,7 +471,9 @@ function generatePuzzleData() {
     possibleHintCells.sort(() => 0.5 - Math.random());
     for(let i=0; i < hintCount && i < possibleHintCells.length; i++) {
         const {r, c} = possibleHintCells[i];
-        initialHints.push({ r, c, type: grid[r][c] === SHIP_ID ? 'ship' : 'water' });
+        if (playerGrid[r][c] === CELL_STATE.EMPTY) { // Only add hints to non-zero-filled cells
+            initialHints.push({ r, c, type: grid[r][c] === SHIP_ID ? 'ship' : 'water' });
+        }
     }
     return {
         gridSize, fleet: fleetConfig.ships, solutionGrid: grid, ships: placedShips, rowClues: rClues, colClues: cClues, initialHints
@@ -448,7 +481,7 @@ function generatePuzzleData() {
 }
 
 function setUiLoading(isLoading, message = '') {
-    document.querySelectorAll('button').forEach(btn => btn.disabled = isLoading);
+    document.querySelectorAll('button, input, select').forEach(el => el.disabled = isLoading);
     ui.loader.classList.toggle('hidden', !isLoading);
     ui.loaderText.textContent = message;
 }
