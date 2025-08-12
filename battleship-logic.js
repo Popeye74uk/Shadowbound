@@ -82,12 +82,15 @@ function updateGridDisplay(isFinished = false, errorCells = [], isFailedAttempt 
     if (containerWidth === 0) return;
 
     const fullGridSize = gridSize + 1;
-    const cellSize = Math.floor(containerWidth / fullGridSize);
+    const gap = 1; // This must match the 'gap' in CSS for #grid-container
+    const totalGapSize = (fullGridSize - 1) * gap;
+    const cellSize = Math.floor((containerWidth - totalGapSize) / fullGridSize);
+    const totalGridWidth = (fullGridSize * cellSize) + totalGapSize;
 
     ui.gridContainer.innerHTML = '';
     ui.gridContainer.style.gridTemplateColumns = `repeat(${fullGridSize}, ${cellSize}px)`;
     ui.gridContainer.style.gridTemplateRows = `repeat(${fullGridSize}, ${cellSize}px)`;
-    ui.gridContainer.style.width = `${fullGridSize * cellSize}px`;
+    ui.gridContainer.style.width = `${totalGridWidth}px`;
 
     const playerRowCounts = Array(gridSize).fill(0);
     const playerColCounts = Array(gridSize).fill(0);
