@@ -14,6 +14,7 @@ const ui = {
     fullscreenBtn: document.getElementById('fullscreen-btn'),
     hintBtn: document.getElementById('hint-btn'),
     revealBtn: document.getElementById('reveal-btn'),
+    finishBtn: document.getElementById('finish-btn'),
     status: document.getElementById('source-status'),
     themeToggleBtn: document.getElementById('theme-toggle-btn'),
     generateBtn: document.getElementById('generate-btn'),
@@ -25,8 +26,7 @@ let gridSize, difficulty, fleetConfig;
 let solutionGrid, playerGrid, ships, rowClues, colClues;
 let debounceTimeout;
 let startTime, puzzleConfigKey;
-let highlightedLine; // For focus mode
-let sunkShipSegments; // For enhanced visuals
+let highlightedLine;
 
 // Game constants
 const FLEET_DEFINITIONS = {
@@ -36,18 +36,6 @@ const FLEET_DEFINITIONS = {
 };
 const CELL_STATE = { EMPTY: 0, WATER: 1, SHIP: 2 };
 const SHIP_ID = 2;
-const EMPTY_ID = 0;
-
-/**
- * Initializes all states for a new puzzle.
- */
-function initNewPuzzleState() {
-    highlightedLine = { type: null, index: null };
-    sunkShipSegments = new Map();
-    startTime = Date.now();
-    ui.hintBtn.disabled = false;
-    ui.revealBtn.disabled = false;
-}
 
 /**
  * Main function to generate and display a new puzzle.
@@ -55,7 +43,11 @@ function initNewPuzzleState() {
 function generatePuzzle() {
     setUiLoading(true, 'Generating new puzzle...');
     hideCompletionModal();
-    initNewPuzzleState();
+    highlightedLine = { type: null, index: null };
+    startTime = Date.now();
+    ui.hintBtn.disabled = false;
+    ui.revealBtn.disabled = false;
+    ui.finishBtn.disabled = false;
     
     setTimeout(() => {
         try {
@@ -64,12 +56,11 @@ function generatePuzzle() {
             ships = puzzleData.ships;
             rowClues = puzzleData.rowClues;
             colClues = puzzleData.colClues;
-            playerGrid = puzzleData.playerGrid; // Use the grid created in generatePuzzleData
+            playerGrid = puzzleData.playerGrid;
 
             puzzleConfigKey = `battleship-${gridSize}-${difficulty}`;
             ui.status.textContent = `Grid: ${gridSize}x${gridSize} | Difficulty: ${difficulty.charAt(0).toUpperCase() + difficulty.slice(1)}`;
             
-            checkSunkShips();
             updateGridDisplay();
             updateFleetDisplay();
             setUiLoading(false);
@@ -81,9 +72,11 @@ function generatePuzzle() {
 }
 
 /**
- * Renders the game grid and clues based on the current state.
+ * Renders the game grid. Icons are placeholders until the game is won.
+ * @param {boolean} [isFinished=false] - If true, displays final ship icons.
+ * @param {Array} [errorCells=[]] - A list of {r, c} objects to highlight as errors.
  */
-function updateGridDisplay() {
+function updateGridDisplay(isFinished = false, errorCells = []) {
     const containerWidth = ui.puzzleContainer.clientWidth;
     if (containerWidth === 0) return;
 
@@ -132,23 +125,29 @@ function updateGridDisplay() {
                 cell.dataset.r = gridR;
                 cell.dataset.c = gridC;
                 if (isHighlighted) cell.classList.add('highlight');
+                if (errorCells.some(e => e.r === gridR && e.c === gridC)) {
+                    cell.classList.add('error-cell');
+                }
                 
                 const state = playerGrid[gridR][gridC];
                 if (state === CELL_STATE.WATER) {
                     cell.classList.add('water');
                 } else if (state === CELL_STATE.SHIP) {
                     cell.classList.add('ship');
-                    const segmentKey = `${gridR},${gridC}`;
-                    if (sunkShipSegments.has(segmentKey)) {
-                        const { part, rotation } = sunkShipSegments.get(segmentKey);
-                        const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
-                        svg.setAttribute("class", "ship-segment-icon");
-                        svg.setAttribute("viewBox", "0 0 16 16");
-                        if (rotation) svg.style.transform = `rotate(${rotation}deg)`;
-                        const use = document.createElementNS("http://www.w3.org/2000/svg", "use");
-                        use.setAttributeNS(null, "href", `#ship-${part}`);
-                        svg.appendChild(use);
-                        cell.appendChild(svg);
+                    if (isFinished) {
+                        const sunkShipSegments = getSunkShipSegments();
+                        const segmentKey = `${gridR},${gridC}`;
+                        if (sunkShipSegments.has(segmentKey)) {
+                            const { part, rotation } = sunkShipSegments.get(segmentKey);
+                            const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+                            svg.setAttribute("class", "ship-segment-icon");
+                            svg.setAttribute("viewBox", "0 0 16 16");
+                            if (rotation) svg.style.transform = `rotate(${rotation}deg)`;
+                            const use = document.createElementNS("http://www.w3.org/2000/svg", "use");
+                            use.setAttributeNS(null, "href", `#ship-${part}`);
+                            svg.appendChild(use);
+                            cell.appendChild(svg);
+                        }
                     } else {
                          const placeholder = document.createElement('div');
                          placeholder.className = 'ship-segment-placeholder';
@@ -166,7 +165,6 @@ function updateGridDisplay() {
 
 /**
  * Handles clicks on any cell in the grid container.
- * @param {Event} e - The click event.
  */
 function handleGridClick(e) {
     const cell = e.target.closest('.grid-cell');
@@ -181,7 +179,6 @@ function handleGridClick(e) {
 
 /**
  * Handles clicks on game cells to cycle their state.
- * @param {HTMLElement} cell - The game cell that was clicked.
  */
 function handleGameCellClick(cell) {
     if (startTime === null) return;
@@ -198,20 +195,12 @@ function handleGameCellClick(cell) {
     }
 
     playerGrid[r][c] = nextState;
-
-    const newSunkShips = checkSunkShips();
-    if (newSunkShips) {
-        autoFillWaterAroundSunkShips();
-    }
-
     updateGridDisplay();
     updateFleetDisplay();
-    checkWinCondition();
 }
 
 /**
  * Handles clicks on clue cells to toggle focus highlight.
- * @param {HTMLElement} cell - The clue cell that was clicked.
  */
 function handleClueCellClick(cell) {
     const type = cell.dataset.clueType;
@@ -227,6 +216,42 @@ function handleClueCellClick(cell) {
     updateGridDisplay();
 }
 
+/**
+ * Checks the player's solution when the "Finish" button is pressed.
+ */
+function checkSolution() {
+    let isCorrect = true;
+    const errorCells = [];
+
+    for (let r = 0; r < gridSize; r++) {
+        for (let c = 0; c < gridSize; c++) {
+            const playerState = playerGrid[r][c];
+            const solutionState = solutionGrid[r][c] === SHIP_ID ? CELL_STATE.SHIP : CELL_STATE.WATER;
+
+            if (playerState !== solutionState) {
+                isCorrect = false;
+                errorCells.push({ r, c });
+            }
+        }
+    }
+
+    if (isCorrect) {
+        const elapsedTime = Date.now() - startTime;
+        startTime = null; // Stop timer
+        ui.finishBtn.disabled = true;
+        ui.hintBtn.disabled = true;
+
+        updateGridDisplay(true); // Redraw with final ship icons
+        updateFleetDisplay(true); // Mark all ships as found
+        handlePuzzleCompletion(elapsedTime);
+    } else {
+        // Show errors for a moment
+        updateGridDisplay(false, errorCells);
+        setTimeout(() => {
+            updateGridDisplay(false, []); // Redraw without errors
+        }, 1500);
+    }
+}
 
 /**
  * Provides a hint by revealing one correct cell's state.
@@ -253,80 +278,21 @@ function giveHint() {
         setTimeout(() => {
             cellElement.classList.remove('hint-flash');
             playerGrid[r][c] = solutionGrid[r][c] === SHIP_ID ? CELL_STATE.SHIP : CELL_STATE.WATER;
-            
-            const newSunkShips = checkSunkShips();
-            if (newSunkShips) {
-                autoFillWaterAroundSunkShips();
-            }
             updateGridDisplay();
             updateFleetDisplay();
-            checkWinCondition();
             if (startTime) ui.hintBtn.disabled = false;
         }, 1000);
     }
 }
 
 /**
- * Scans the player grid, compares to solution, and populates the sunkShipSegments map.
- * @returns {boolean} True if the number of sunk ships increased since the last check.
+ * Event Listeners and Game Initialization
  */
-function checkSunkShips() {
-    const initialSunkCount = sunkShipSegments.size;
-    sunkShipSegments.clear();
-    const playerShips = identifyShipsInGrid(playerGrid, true);
-    
-    for (const pShip of playerShips) {
-        if (pShip.length === 1) {
-            const {r, c} = pShip.segments[0];
-            sunkShipSegments.set(`${r},${c}`, { part: 'submarine', rotation: 0 });
-            continue;
-        }
-        const isVertical = pShip.segments.length > 1 && pShip.segments[0].c === pShip.segments[1].c;
-        const sortedSegments = pShip.segments.sort((a, b) => isVertical ? a.r - b.r : a.c - b.c);
-        const firstEndRotation = isVertical ? 270 : 180;
-        const lastEndRotation = isVertical ? 90 : 0;
-        const middleRotation = isVertical ? 0 : 90;
-        const {r: r1, c: c1} = sortedSegments[0];
-        sunkShipSegments.set(`${r1},${c1}`, { part: 'end', rotation: firstEndRotation });
-        const {r: rL, c: cL} = sortedSegments[sortedSegments.length - 1];
-        sunkShipSegments.set(`${rL},${cL}`, { part: 'end', rotation: lastEndRotation });
-        for (let i = 1; i < sortedSegments.length - 1; i++) {
-            const {r, c} = sortedSegments[i];
-            sunkShipSegments.set(`${r},${c}`, { part: 'middle', rotation: middleRotation });
-        }
-    }
-    return sunkShipSegments.size > initialSunkCount;
-}
-
-/**
- * Places water tiles in all 8 directions around all sunk ship segments.
- */
-function autoFillWaterAroundSunkShips() {
-    for (const key of sunkShipSegments.keys()) {
-        const [r_str, c_str] = key.split(',');
-        const r = parseInt(r_str);
-        const c = parseInt(c_str);
-
-        for (let dr = -1; dr <= 1; dr++) {
-            for (let dc = -1; dc <= 1; dc++) {
-                if (dr === 0 && dc === 0) continue;
-                const nr = r + dr;
-                const nc = c + dc;
-                if (nr >= 0 && nr < gridSize && nc >= 0 && nc < gridSize && playerGrid[nr][nc] === CELL_STATE.EMPTY) {
-                    playerGrid[nr][nc] = CELL_STATE.WATER;
-                }
-            }
-        }
-    }
-}
-
-
-// --- Event Listeners and Init ---
-
 function initEventListeners() {
     ui.generateBtn.addEventListener('click', generatePuzzle);
     ui.hintBtn.addEventListener('click', giveHint);
     ui.revealBtn.addEventListener('click', revealSolution);
+    ui.finishBtn.addEventListener('click', checkSolution);
     ui.playAgainBtn.addEventListener('click', generatePuzzle);
     ui.completionModal.addEventListener('click', hideCompletionModal);
     ui.gridSizeSelect.addEventListener('change', handleGlobalOptionChange);
@@ -347,7 +313,7 @@ window.addEventListener('load', () => {
     setTimeout(generatePuzzle, 0);
 });
 
-// --- Utility and Helper functions ---
+// --- Utility and Helper Functions ---
 
 function updatePuzzleParameters() {
     gridSize = parseInt(ui.gridSizeSelect.value, 10);
@@ -356,7 +322,7 @@ function updatePuzzleParameters() {
 }
 
 function placeShipsOnGrid() {
-    const grid = Array(gridSize).fill(0).map(() => Array(gridSize).fill(EMPTY_ID));
+    const grid = Array(gridSize).fill(0).map(() => Array(gridSize).fill(0));
     const placedShips = [];
     const shipsToPlace = [...fleetConfig.ships];
     for (const shipLength of shipsToPlace) {
@@ -374,7 +340,7 @@ function placeShipsOnGrid() {
                         let curR = r + (isVertical ? i : 0) + dr;
                         let curC = c + (isVertical ? 0 : i) + dc;
                         if (curR >= 0 && curR < gridSize && curC >= 0 && curC < gridSize) {
-                            if (grid[curR][curC] !== EMPTY_ID) {
+                            if (grid[curR][curC] !== 0) {
                                 canPlace = false; break;
                             }
                         }
@@ -400,10 +366,6 @@ function placeShipsOnGrid() {
     return { grid, ships: placedShips };
 }
 
-/**
- * BUG FIX: This function now creates and returns the playerGrid as well,
- * after filling zeros, so that the hints can be placed correctly.
- */
 function generatePuzzleData() {
     updatePuzzleParameters();
     let placedShips;
@@ -433,7 +395,6 @@ function generatePuzzleData() {
         }
     }
 
-    // Create the player grid here
     const tempPlayerGrid = Array(gridSize).fill(0).map(() => Array(gridSize).fill(CELL_STATE.EMPTY));
     rClues.forEach((clue, r) => {
         if (clue === 0) {
@@ -446,13 +407,12 @@ function generatePuzzleData() {
         }
     });
     
-    // Now place hints, ensuring not to overwrite auto-filled water
     const initialHints = [];
     const hintCount = fleetConfig.hints[difficulty];
     const possibleHintCells = [];
     for (let r=0; r < gridSize; r++) {
         for (let c=0; c < gridSize; c++) {
-            if (tempPlayerGrid[r][c] === CELL_STATE.EMPTY) { // Only pick from empty cells
+            if (tempPlayerGrid[r][c] === CELL_STATE.EMPTY) {
                 possibleHintCells.push({r, c});
             }
         }
@@ -464,7 +424,6 @@ function generatePuzzleData() {
         initialHints.push({ r, c, type: grid[r][c] === SHIP_ID ? 'ship' : 'water' });
     }
 
-    // Apply the hints to the grid we're returning
     initialHints.forEach(hint => {
         tempPlayerGrid[hint.r][hint.c] = hint.type === 'ship' ? CELL_STATE.SHIP : CELL_STATE.WATER;
     });
@@ -474,20 +433,17 @@ function generatePuzzleData() {
     };
 }
 
-
 function setUiLoading(isLoading, message = '') {
     document.querySelectorAll('button, input, select').forEach(el => el.disabled = isLoading);
     ui.loader.classList.toggle('hidden', !isLoading);
     ui.loaderText.textContent = message;
 }
 
-function updateFleetDisplay() {
+function updateFleetDisplay(isFinished = false) {
     ui.fleetList.innerHTML = '';
-    const sunkShips = identifyShipsInGrid(playerGrid, true);
-    const sunkCounts = {};
-    sunkShips.forEach(ship => sunkCounts[ship.length] = (sunkCounts[ship.length] || 0) + 1);
     const totalShipCounts = {};
     fleetConfig.ships.forEach(len => totalShipCounts[len] = (totalShipCounts[len] || 0) + 1);
+
     Object.keys(totalShipCounts).sort((a,b) => b-a).forEach(length => {
         const count = totalShipCounts[length];
         const li = document.createElement('li');
@@ -500,87 +456,52 @@ function updateFleetDisplay() {
         label.textContent = `x ${count}`;
         li.appendChild(icon);
         li.appendChild(label);
-        if (sunkCounts[length] >= count) {
+        if (isFinished) {
             li.classList.add('found');
         }
         ui.fleetList.appendChild(li);
     });
 }
 
-function checkWinCondition() {
-    let correctShipCells = 0;
-    let totalShipCells = 0;
-    let incorrectShipPlacement = false;
-    for (let r = 0; r < gridSize; r++) {
-        for (let c = 0; c < gridSize; c++) {
-            if (solutionGrid[r][c] === SHIP_ID) {
-                totalShipCells++;
-                if (playerGrid[r][c] === CELL_STATE.SHIP) {
-                    correctShipCells++;
-                }
-            } else {
-                if (playerGrid[r][c] === CELL_STATE.SHIP) {
-                    incorrectShipPlacement = true;
-                }
-            }
-        }
-    }
-    if (!incorrectShipPlacement && correctShipCells === totalShipCells) {
-        const elapsedTime = Date.now() - startTime;
-        handlePuzzleCompletion(elapsedTime);
-        revealSolution();
-    }
-}
-
 function revealSolution() {
     if (!solutionGrid) return;
-    playerGrid = solutionGrid.map(row => [...row]);
-    checkSunkShips();
-    updateGridDisplay();
-    updateFleetDisplay();
-    ui.hintBtn.disabled = true;
-    ui.revealBtn.disabled = true;
     startTime = null;
+    playerGrid = solutionGrid.map(row => row.map(cell => cell === SHIP_ID ? CELL_STATE.SHIP : CELL_STATE.WATER));
+    updateGridDisplay(true);
+    updateFleetDisplay(true);
+    ui.hintBtn.disabled = true;
+    ui.finishBtn.disabled = true;
+    ui.revealBtn.disabled = true;
 }
 
-function identifyShipsInGrid(targetGrid, mustBeCorrect = false) {
-    const checked = Array(gridSize).fill(0).map(() => Array(gridSize).fill(false));
-    const foundShips = [];
-    const solutionSignatures = mustBeCorrect ? new Set(ships.map(s => s.segments.map(seg => `${seg.r},${seg.c}`).sort().join(';'))) : null;
-    for (let r = 0; r < gridSize; r++) {
-        for (let c = 0; c < gridSize; c++) {
-            if (targetGrid[r][c] === CELL_STATE.SHIP && !checked[r][c]) {
-                const ship = { length: 0, segments: [] };
-                const q = [{r, c}];
-                checked[r][c] = true;
-                while(q.length > 0) {
-                    const curr = q.shift();
-                    ship.length++;
-                    ship.segments.push(curr);
-                    [{dr:0,dc:1}, {dr:0,dc:-1}, {dr:1,dc:0}, {dr:-1,dc:0}].forEach(dir => {
-                        const nr = curr.r + dir.dr, nc = curr.c + dir.dc;
-                        if (nr >= 0 && nr < gridSize && nc >= 0 && nc < gridSize && targetGrid[nr][nc] === CELL_STATE.SHIP && !checked[nr][nc]) {
-                            checked[nr][nc] = true;
-                            q.push({r: nr, c: nc});
-                        }
-                    });
-                }
-                if (mustBeCorrect) {
-                    const signature = ship.segments.map(seg => `${seg.r},${seg.c}`).sort().join(';');
-                    if (solutionSignatures.has(signature)) foundShips.push(ship);
-                } else {
-                    foundShips.push(ship);
-                }
-            }
+function getSunkShipSegments() {
+    const segments = new Map();
+    for (const ship of ships) {
+        if (ship.length === 1) {
+            const {r, c} = ship.segments[0];
+            segments.set(`${r},${c}`, { part: 'submarine', rotation: 0 });
+            continue;
+        }
+        const isVertical = ship.segments.length > 1 && ship.segments[0].c === ship.segments[1].c;
+        const sortedSegments = ship.segments.sort((a, b) => isVertical ? a.r - b.r : a.c - b.c);
+        const firstEndRotation = isVertical ? 270 : 180;
+        const lastEndRotation = isVertical ? 90 : 0;
+        const middleRotation = isVertical ? 0 : 90;
+        const {r: r1, c: c1} = sortedSegments[0];
+        segments.set(`${r1},${c1}`, { part: 'end', rotation: firstEndRotation });
+        const {r: rL, c: cL} = sortedSegments[sortedSegments.length - 1];
+        segments.set(`${rL},${cL}`, { part: 'end', rotation: lastEndRotation });
+        for (let i = 1; i < sortedSegments.length - 1; i++) {
+            const {r, c} = sortedSegments[i];
+            segments.set(`${r},${c}`, { part: 'middle', rotation: middleRotation });
         }
     }
-    return foundShips;
+    return segments;
 }
 
 function formatTime(milliseconds) { const s = Math.floor(milliseconds / 1000); return `${String(Math.floor(s/60)).padStart(2,'0')}:${String(s%60).padStart(2,'0')}`; }
 
 function handlePuzzleCompletion(elapsedTime) {
-    startTime = null;
     const bestTime = localStorage.getItem(puzzleConfigKey);
     let isNewBest = false;
     if (bestTime === null || elapsedTime < parseInt(bestTime, 10)) {
