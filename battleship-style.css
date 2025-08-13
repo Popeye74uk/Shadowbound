@@ -146,6 +146,14 @@ body {
     z-index: 1;
 }
 
+.game-cell.locked-cell {
+    cursor: not-allowed;
+    box-shadow: 0 0 0 1px rgba(128, 128, 128, 0.15) inset;
+}
+body.dark-mode .game-cell.locked-cell {
+    box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.1) inset;
+}
+
 .game-cell.hint-cell {
     box-shadow: 0 0 0 3px var(--color-info) inset;
 }

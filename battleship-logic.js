@@ -36,7 +36,7 @@ const ui = {
 
 // Game state variables
 let gridSize, difficulty, fleetConfig;
-let solutionGrid, playerGrid, ships, rowClues, colClues, initialPlayerGrid;
+let solutionGrid, playerGrid, ships, rowClues, colClues, initialPlayerGrid, lockedGrid, initialLockedGrid;
 let debounceTimeout;
 let startTime, puzzleConfigKey;
 let highlightedLine;
@@ -82,17 +82,21 @@ function generatePuzzle() {
             ships = puzzleData.ships;
             rowClues = puzzleData.rowClues;
             colClues = puzzleData.colClues;
+            
             playerGrid = puzzleData.playerGrid;
             initialPlayerGrid = JSON.parse(JSON.stringify(puzzleData.playerGrid));
+            
+            lockedGrid = puzzleData.lockedGrid;
+            initialLockedGrid = JSON.parse(JSON.stringify(puzzleData.lockedGrid));
+            
             startTime = Date.now();
-
             puzzleConfigKey = `battleship-${gridSize}-${difficulty}`;
             ui.status.textContent = `Grid: ${gridSize}x${gridSize} | Difficulty: ${difficulty.charAt(0).toUpperCase() + difficulty.slice(1)}`;
 
             applyAutoWaterLogic();
             checkForFoundShips();
             updateGridDisplay();
-            updateUndoButton(); // Set initial state of undo button
+            updateUndoButton();
             setUiLoading(false);
         } catch (error) {
             ui.status.textContent = `Error: ${error.message}. Please try again.`;
@@ -171,6 +175,8 @@ function updateGridDisplay(isFinished = false, errorCells = [], isFailedAttempt 
                 cell.className = 'grid-cell game-cell';
                 cell.dataset.r = gridR;
                 cell.dataset.c = gridC;
+
+                if (lockedGrid[gridR][gridC]) cell.classList.add('locked-cell');
                 if (gridR === selectedCell.r && gridC === selectedCell.c) cell.classList.add('selected-cell');
                 if (isHighlighted) cell.classList.add('highlight');
                 if (errorCells.some(e => e.r === gridR && e.c === gridC)) cell.classList.add('error-cell');
@@ -229,9 +235,13 @@ function handleGameCellClick(cell) {
     if (startTime === null) return;
     const r = parseInt(cell.dataset.r);
     const c = parseInt(cell.dataset.c);
-    
-    // Save state BEFORE modification for undo
-    moveHistory.push(JSON.parse(JSON.stringify(playerGrid)));
+
+    if (lockedGrid[r][c]) return;
+
+    moveHistory.push({
+        playerGrid: JSON.parse(JSON.stringify(playerGrid)),
+        lockedGrid: JSON.parse(JSON.stringify(lockedGrid))
+    });
     if (moveHistory.length > 10) moveHistory.shift();
     
     selectedCell.r = r;
@@ -240,7 +250,7 @@ function handleGameCellClick(cell) {
     let nextState = (currentState + 1) % 3;
     if (ui.mistakeModeCheckbox.checked && nextState === CELL_STATE.SHIP && solutionGrid[r][c] !== SHIP_ID) {
         cell.classList.add('error-flash');
-        moveHistory.pop(); // Remove the saved state since the move was invalid
+        moveHistory.pop();
         return;
     }
 
@@ -270,6 +280,7 @@ function applyAutoWaterLogic() {
             for (let c = 0; c < gridSize; c++) {
                 if (playerGrid[r][c] === CELL_STATE.EMPTY) {
                     playerGrid[r][c] = CELL_STATE.WATER;
+                    lockedGrid[r][c] = true;
                 }
             }
         }
@@ -279,6 +290,7 @@ function applyAutoWaterLogic() {
             for (let r = 0; r < gridSize; r++) {
                 if (playerGrid[r][c] === CELL_STATE.EMPTY) {
                     playerGrid[r][c] = CELL_STATE.WATER;
+                    lockedGrid[r][c] = true;
                 }
             }
         }
@@ -492,6 +504,7 @@ function verifySolvability(puzzle) {
 function restartPuzzle() {
     if (!initialPlayerGrid) return;
     playerGrid = JSON.parse(JSON.stringify(initialPlayerGrid));
+    lockedGrid = JSON.parse(JSON.stringify(initialLockedGrid));
     moveHistory = [];
     hintedCells = [];
     startTime = Date.now();
@@ -503,7 +516,9 @@ function restartPuzzle() {
 
 function undoMove() {
     if (moveHistory.length === 0) return;
-    playerGrid = moveHistory.pop();
+    const lastState = moveHistory.pop();
+    playerGrid = lastState.playerGrid;
+    lockedGrid = lastState.lockedGrid;
     updateUndoButton();
     checkForFoundShips();
     updateGridDisplay();
@@ -596,6 +611,8 @@ function generatePuzzleData() {
     allCells.sort(() => 0.5 - Math.random());
 
     let finalPlayerGrid = grid.map(row => row.map(cell => cell === SHIP_ID ? CELL_STATE.SHIP : CELL_STATE.WATER));
+    let finalLockedGrid = Array(gridSize).fill(0).map(() => Array(gridSize).fill(false));
+
     const cluesToKeepCount = fleetConfig.clues[difficulty];
     let cellsToRemove = gridSize * gridSize - cluesToKeepCount;
 
@@ -619,11 +636,25 @@ function generatePuzzleData() {
         }
     }
     
-    rClues.forEach((clue, r) => { if (clue === 0) { for (let c = 0; c < gridSize; c++) finalPlayerGrid[r][c] = CELL_STATE.WATER; } });
-    cClues.forEach((clue, c) => { if (clue === 0) { for (let r = 0; r < gridSize; r++) finalPlayerGrid[r][c] = CELL_STATE.WATER; } });
+    rClues.forEach((clue, r) => { 
+        if (clue === 0) { 
+            for (let c = 0; c < gridSize; c++) {
+                finalPlayerGrid[r][c] = CELL_STATE.WATER;
+                finalLockedGrid[r][c] = true;
+            }
+        }
+    });
+    cClues.forEach((clue, c) => { 
+        if (clue === 0) { 
+            for (let r = 0; r < gridSize; r++) {
+                finalPlayerGrid[r][c] = CELL_STATE.WATER;
+                finalLockedGrid[r][c] = true;
+            }
+        }
+    });
 
     return {
-        gridSize, fleet: fleetConfig.ships, solutionGrid: grid, ships: placedShips, rowClues: rClues, colClues: cClues, playerGrid: finalPlayerGrid
+        gridSize, fleet: fleetConfig.ships, solutionGrid: grid, ships: placedShips, rowClues: rClues, colClues: cClues, playerGrid: finalPlayerGrid, lockedGrid: finalLockedGrid
     };
 }
 
@@ -718,20 +749,16 @@ function getSunkShipSegments() {
         const isVertical = ship.segments.length > 1 && ship.segments[0].c === ship.segments[1].c;
         const sortedSegments = ship.segments.sort((a, b) => isVertical ? a.r - b.r : a.c - b.c);
 
-        // Define rotations. Default end piece SVG points right (0 deg).
-        const firstEndRotation = isVertical ? 270 : 180; // Pointing UP or LEFT
-        const lastEndRotation = isVertical ? 90 : 0;    // Pointing DOWN or RIGHT
-        const middleRotation = isVertical ? 90 : 0;   // Rotated for vertical or horizontal alignment
+        const firstEndRotation = isVertical ? 270 : 180;
+        const lastEndRotation = isVertical ? 90 : 0;
+        const middleRotation = isVertical ? 90 : 0;
 
-        // Set the first segment (top or left end)
         const { r: r1, c: c1 } = sortedSegments[0];
         segments.set(`${r1},${c1}`, { part: 'end', rotation: firstEndRotation });
 
-        // Set the last segment (bottom or right end)
         const { r: rL, c: cL } = sortedSegments[sortedSegments.length - 1];
         segments.set(`${rL},${cL}`, { part: 'end', rotation: lastEndRotation });
 
-        // Set all middle segments
         for (let i = 1; i < sortedSegments.length - 1; i++) {
             const { r, c } = sortedSegments[i];
             segments.set(`${r},${c}`, { part: 'middle', rotation: middleRotation });
@@ -744,8 +771,10 @@ function getSunkShipSegments() {
 function giveHint() {
     ui.puzzleContainer.scrollIntoView({ behavior: 'smooth', block: 'start' });
 
-    // Save state BEFORE hint for undo
-    moveHistory.push(JSON.parse(JSON.stringify(playerGrid)));
+    moveHistory.push({
+        playerGrid: JSON.parse(JSON.stringify(playerGrid)),
+        lockedGrid: JSON.parse(JSON.stringify(lockedGrid))
+    });
     if (moveHistory.length > 10) moveHistory.shift();
 
     const solvedGrid = runSolver(JSON.parse(JSON.stringify(playerGrid)), rowClues, colClues);
@@ -762,6 +791,7 @@ function giveHint() {
     if (possibleHints.length > 0) {
         const hint = possibleHints[Math.floor(Math.random() * possibleHints.length)];
         playerGrid[hint.r][hint.c] = hint.state;
+        lockedGrid[hint.r][hint.c] = true;
         hintedCells.push({ r: hint.r, c: hint.c });
         
         applyAutoWaterLogic();
@@ -769,7 +799,7 @@ function giveHint() {
         updateGridDisplay();
         updateUndoButton();
     } else {
-        moveHistory.pop(); // No hint was given, so remove the saved state
+        moveHistory.pop();
         ui.status.textContent = 'No more logical moves could be found.';
         setTimeout(() => {
             ui.status.textContent = `Grid: ${gridSize}x${gridSize} | Difficulty: ${difficulty.charAt(0).toUpperCase() + difficulty.slice(1)}`;
