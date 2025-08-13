@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Battleships Solo v3.30</title>
+    <title>Battleships Solo v3.5</title>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
     <link rel="stylesheet" href="battleship-style.css">
 </head>
@@ -23,7 +23,7 @@
         </defs>
     </svg>
 
-    <div class="container">
+    <div class="container" id="container">
         <header class="main-header">
             <div class="header-spacer"></div>
             <h1>Battleships Solo</h1>
@@ -121,6 +121,7 @@
                 <select id="puzzles-per-page-select">
                     <option value="1">1</option>
                     <option value="2" selected>2</option>
+                    <option value="4">4</option>
                 </select>
                 <label>Options:</label>
                 <div id="book-checkbox-options">

@@ -191,7 +191,7 @@ function updateGridDisplay(isFinished = false, errorCells = [], isFailedAttempt 
                 if (hintedCells.some(h => h.r === gridR && h.c === gridC)) cell.classList.add('hint-cell');
 
                 const state = playerGrid[gridR][gridC];
-                const isAutoFilled = autoFilledWaterCells.has(`${gridR},${gridC}`);
+                const isAutoFilled = autoFilledWaterCells.has(`${r},${c}`);
 
                 if (state === CELL_STATE.WATER || isAutoFilled) {
                     cell.classList.add('water');
@@ -905,7 +905,7 @@ function drawSingleBattleshipsGrid(doc, puzzleData, startX, startY, gridTotalSiz
             const state = gridToDraw[r][c];
 
             if(state === CELL_STATE.WATER) {
-                doc.setFillColor(224, 224, 224); // Light grey
+                doc.setFillColor(200, 200, 200);
                 doc.rect(cellX, cellY, cellSize, cellSize, 'F');
             } else if (state === CELL_STATE.SHIP) {
                  doc.setFillColor(0, 0, 0); // Black
@@ -928,7 +928,11 @@ function drawPuzzlesOnPage(doc, puzzles, startIndex, options) {
     const pageW = doc.internal.pageSize.getWidth(), pageH = doc.internal.pageSize.getHeight(), cornerRadius = 3;
     const layouts = {
         1: [{ x: (pageW - 120) / 2, y: 40, size: 120 }],
-        2: [{ x: (pageW - 75) / 2, y: 30, size: 75 }, { x: (pageW - 75) / 2, y: 155, size: 75 }],
+        2: [{ x: (pageW - 75) / 2, y: 30, size: 75 }, { x: (pageW - 75) / 2, y: 165, size: 75 }],
+        4: [
+            { x: 20, y: 30, size: 75 }, { x: pageW - 75 - 20, y: 30, size: 75 },
+            { x: 20, y: 165, size: 75 }, { x: pageW - 75 - 20, y: 165, size: 75 }
+        ]
     };
     const layout = layouts[puzzlesPerPage] || layouts[1];
 
@@ -944,7 +948,7 @@ function drawPuzzlesOnPage(doc, puzzles, startIndex, options) {
         // --- Draw Header ---
         const titleText = `Puzzle ${puzzleIndex + 1}`;
         const headerCenterX = x + size / 2;
-        const headerY = y - 15;
+        const headerY = y - 12; // Balanced gap
         
         doc.setFont('helvetica', 'bold').setFontSize(12).text(titleText, headerCenterX, headerY, { align: 'center' });
         doc.setFont('helvetica', 'normal').setFontSize(9).text(`Difficulty: ${puzzleData.difficulty}`, headerCenterX, headerY + 5, { align: 'center' });
@@ -971,7 +975,6 @@ function drawPuzzlesOnPage(doc, puzzles, startIndex, options) {
             doc.text('Fleet', fleetCenterX, currentY, { align: 'center' });
             currentY += 8;
 
-            // --- Calculate layout for the left-aligned block ---
             doc.setFont('helvetica', 'normal').setFontSize(9);
             const iconSegmentSize = 3.5;
             const iconGap = 0.7;
@@ -992,17 +995,15 @@ function drawPuzzlesOnPage(doc, puzzles, startIndex, options) {
             const blockStartX = fleetCenterX - maxLineWidth / 2;
 
             for(const length of sortedLengths) {
-                doc.setFillColor(0, 0, 0); // Use solid black for all ship icons
+                doc.setFillColor(0, 0, 0);
                 const count = shipCounts[length];
                 const text = `x ${count}`;
                 const iconWidth = length * iconSegmentSize + (length - 1) * iconGap;
 
-                // Draw Icons (left-aligned in the block)
                 for (let j = 0; j < length; j++) {
                     doc.rect(blockStartX + j * (iconSegmentSize + iconGap), currentY - (iconSegmentSize/2), iconSegmentSize, iconSegmentSize, 'F');
                 }
                 
-                // Draw Text (immediately after icons)
                 doc.text(text, blockStartX + iconWidth + textGap, currentY, { baseline: 'middle' });
 
                 currentY += iconSegmentSize + 3;
