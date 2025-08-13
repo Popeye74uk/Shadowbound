@@ -36,7 +36,7 @@ const ui = {
 
 // Game state variables
 let gridSize, difficulty, fleetConfig;
-let solutionGrid, playerGrid, ships, rowClues, colClues, initialPlayerGrid, lockedGrid, initialLockedGrid;
+let solutionGrid, playerGrid, ships, rowClues, colClues, initialPlayerGrid, lockedGrid, initialLockedGrid, autoWaterGrid, initialAutoWaterGrid;
 let debounceTimeout;
 let startTime, puzzleConfigKey;
 let highlightedLine;
@@ -88,6 +88,9 @@ function generatePuzzle() {
             
             lockedGrid = puzzleData.lockedGrid;
             initialLockedGrid = JSON.parse(JSON.stringify(puzzleData.lockedGrid));
+
+            autoWaterGrid = puzzleData.autoWaterGrid;
+            initialAutoWaterGrid = JSON.parse(JSON.stringify(puzzleData.autoWaterGrid));
             
             startTime = Date.now();
             puzzleConfigKey = `battleship-${gridSize}-${difficulty}`;
@@ -240,7 +243,9 @@ function handleGameCellClick(cell) {
 
     moveHistory.push({
         playerGrid: JSON.parse(JSON.stringify(playerGrid)),
-        lockedGrid: JSON.parse(JSON.stringify(lockedGrid))
+        lockedGrid: JSON.parse(JSON.stringify(lockedGrid)),
+        autoWaterGrid: JSON.parse(JSON.stringify(autoWaterGrid)),
+        hintedCells: JSON.parse(JSON.stringify(hintedCells))
     });
     if (moveHistory.length > 10) moveHistory.shift();
     
@@ -264,6 +269,16 @@ function handleGameCellClick(cell) {
 }
 
 function applyAutoWaterLogic() {
+    // Clear previously auto-filled water
+    for (let r = 0; r < gridSize; r++) {
+        for (let c = 0; c < gridSize; c++) {
+            if (autoWaterGrid[r][c]) {
+                playerGrid[r][c] = CELL_STATE.EMPTY;
+                autoWaterGrid[r][c] = false;
+            }
+        }
+    }
+
     const playerRowCounts = Array(gridSize).fill(0);
     const playerColCounts = Array(gridSize).fill(0);
     for (let r = 0; r < gridSize; r++) {
@@ -275,12 +290,13 @@ function applyAutoWaterLogic() {
         }
     }
 
+    // Re-apply auto-water where clues are satisfied
     for (let r = 0; r < gridSize; r++) {
         if (playerRowCounts[r] === rowClues[r]) {
             for (let c = 0; c < gridSize; c++) {
                 if (playerGrid[r][c] === CELL_STATE.EMPTY) {
                     playerGrid[r][c] = CELL_STATE.WATER;
-                    lockedGrid[r][c] = true;
+                    autoWaterGrid[r][c] = true;
                 }
             }
         }
@@ -290,7 +306,7 @@ function applyAutoWaterLogic() {
             for (let r = 0; r < gridSize; r++) {
                 if (playerGrid[r][c] === CELL_STATE.EMPTY) {
                     playerGrid[r][c] = CELL_STATE.WATER;
-                    lockedGrid[r][c] = true;
+                    autoWaterGrid[r][c] = true;
                 }
             }
         }
@@ -505,8 +521,9 @@ function restartPuzzle() {
     if (!initialPlayerGrid) return;
     playerGrid = JSON.parse(JSON.stringify(initialPlayerGrid));
     lockedGrid = JSON.parse(JSON.stringify(initialLockedGrid));
-    moveHistory = [];
+    autoWaterGrid = JSON.parse(JSON.stringify(initialAutoWaterGrid));
     hintedCells = [];
+    moveHistory = [];
     startTime = Date.now();
     updateUndoButton();
     checkForFoundShips();
@@ -519,6 +536,8 @@ function undoMove() {
     const lastState = moveHistory.pop();
     playerGrid = lastState.playerGrid;
     lockedGrid = lastState.lockedGrid;
+    autoWaterGrid = lastState.autoWaterGrid;
+    hintedCells = lastState.hintedCells;
     updateUndoButton();
     checkForFoundShips();
     updateGridDisplay();
@@ -612,6 +631,7 @@ function generatePuzzleData() {
 
     let finalPlayerGrid = grid.map(row => row.map(cell => cell === SHIP_ID ? CELL_STATE.SHIP : CELL_STATE.WATER));
     let finalLockedGrid = Array(gridSize).fill(0).map(() => Array(gridSize).fill(false));
+    let finalAutoWaterGrid = Array(gridSize).fill(0).map(() => Array(gridSize).fill(false));
 
     const cluesToKeepCount = fleetConfig.clues[difficulty];
     let cellsToRemove = gridSize * gridSize - cluesToKeepCount;
@@ -639,22 +659,26 @@ function generatePuzzleData() {
     rClues.forEach((clue, r) => { 
         if (clue === 0) { 
             for (let c = 0; c < gridSize; c++) {
-                finalPlayerGrid[r][c] = CELL_STATE.WATER;
-                finalLockedGrid[r][c] = true;
+                if (finalPlayerGrid[r][c] === CELL_STATE.EMPTY) {
+                    finalPlayerGrid[r][c] = CELL_STATE.WATER;
+                    finalLockedGrid[r][c] = true;
+                }
             }
         }
     });
     cClues.forEach((clue, c) => { 
         if (clue === 0) { 
             for (let r = 0; r < gridSize; r++) {
-                finalPlayerGrid[r][c] = CELL_STATE.WATER;
-                finalLockedGrid[r][c] = true;
+                if (finalPlayerGrid[r][c] === CELL_STATE.EMPTY) {
+                    finalPlayerGrid[r][c] = CELL_STATE.WATER;
+                    finalLockedGrid[r][c] = true;
+                }
             }
         }
     });
 
     return {
-        gridSize, fleet: fleetConfig.ships, solutionGrid: grid, ships: placedShips, rowClues: rClues, colClues: cClues, playerGrid: finalPlayerGrid, lockedGrid: finalLockedGrid
+        gridSize, fleet: fleetConfig.ships, solutionGrid: grid, ships: placedShips, rowClues: rClues, colClues: cClues, playerGrid: finalPlayerGrid, lockedGrid: finalLockedGrid, autoWaterGrid: finalAutoWaterGrid
     };
 }
 
@@ -773,7 +797,9 @@ function giveHint() {
 
     moveHistory.push({
         playerGrid: JSON.parse(JSON.stringify(playerGrid)),
-        lockedGrid: JSON.parse(JSON.stringify(lockedGrid))
+        lockedGrid: JSON.parse(JSON.stringify(lockedGrid)),
+        autoWaterGrid: JSON.parse(JSON.stringify(autoWaterGrid)),
+        hintedCells: JSON.parse(JSON.stringify(hintedCells))
     });
     if (moveHistory.length > 10) moveHistory.shift();
 

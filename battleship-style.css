@@ -143,7 +143,7 @@ body {
 
 .game-cell.selected-cell {
     box-shadow: 0 0 0 3px var(--color-primary) inset;
-    z-index: 1;
+    z-index: 2;
 }
 
 .game-cell.locked-cell {
@@ -154,8 +154,9 @@ body.dark-mode .game-cell.locked-cell {
     box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.1) inset;
 }
 
-.game-cell.hint-cell {
+.game-cell.hint-cell, .game-cell.locked-cell.hint-cell {
     box-shadow: 0 0 0 3px var(--color-info) inset;
+    z-index: 1;
 }
 
 .game-cell.check-work-error {
