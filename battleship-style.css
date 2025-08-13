@@ -23,6 +23,7 @@
     --color-warning: #fd7e14;
     --color-info: #6f42c1;
     --color-pink: #d63384;
+    --color-teal: #20c997;
     
     /* Game-Specific Colors */
     --color-cell-water-guess: #d0e8ff;
@@ -101,7 +102,7 @@ body {
     justify-content: center; 
     align-items: center; 
     gap: 20px;
-    position: relative; /* Added for modal positioning context */
+    position: relative;
 }
 
 #puzzle-container { position: relative; width: 100%; }
@@ -181,6 +182,8 @@ body {
     transform: translate(-50%, -50%);
 }
 
+.hidden { display: none !important; }
+
 body.dark-mode .loader { background-color: var(--color-background); }
 .loader { position: absolute; top: 0; left: 0; right: 0; bottom: 0; background-color: var(--color-container-bg); display: flex; justify-content: center; align-items: center; flex-direction: column; gap: 15px; z-index: 10; font-size: 1.1em; color: var(--color-text-secondary); border-radius: 4px; transition: opacity 0.3s; }
 .loader.hidden { opacity: 0; pointer-events: none; }
@@ -211,7 +214,7 @@ body.dark-mode .loader { background-color: var(--color-background); }
 }
 
 .controls-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 15px; max-width: 415px; margin: 25px auto 0 auto; }
-#reveal-btn { grid-column: 1 / -1; } /* Make last button span full width */
+#reveal-btn { grid-column: 1 / -1; }
 
 .global-options-container { display: flex; justify-content: center; align-items: center; gap: 10px 25px; margin-top: 25px; margin-bottom: 0px; font-size: 1em; color: var(--color-text-primary); flex-wrap: wrap; }
 .option-group { display: flex; align-items: center; gap: 10px; }
@@ -224,12 +227,26 @@ button { padding: 12px 20px; font-size: 1em; font-weight: bold; cursor: pointer;
 button:hover:not(:disabled) { transform: translateY(-2px); box-shadow: 0 4px 8px var(--color-box-shadow-hover); }
 button:disabled { background-color: var(--color-button-disabled-bg); cursor: not-allowed; opacity: 0.7; }
 #generate-btn { background-color: var(--color-primary); }
-#reveal-btn { background-color: var(--color-danger); }
+#reveal-btn { background-color: var(--color-success); }
 #hint-btn { background-color: var(--color-info); }
 #check-btn { background-color: var(--color-pink); }
 #finish-btn { background-color: var(--color-warning); }
 #undo-btn { background-color: var(--color-success); }
 #restart-btn { background-color: var(--color-info); }
+#download-pdf-btn { background-color: var(--color-teal); }
+#make-book-btn { background-color: var(--color-danger); }
+
+.panel { max-width: 415px; margin: 25px auto 0; padding: 20px; border-radius: 8px; box-shadow: 0 4px 12px var(--color-box-shadow); display: none; background-color: var(--color-container-bg); }
+.panel h3 { margin-top: 0; }
+.book-options-grid { display: grid; grid-template-columns: auto 1fr; gap: 10px 15px; align-items: center; }
+.book-options-grid label { text-align: right; }
+#puzzle-count-input, #puzzles-per-page-select { width: 70px; box-sizing: border-box; }
+#book-checkbox-options { display: flex; gap: 20px; align-items: center; justify-content: flex-start; }
+#create-book-btn { background-color: var(--color-success); }
+#cancel-book-options-btn { background-color: var(--color-text-secondary); }
+
+.book-loader { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background-color: var(--color-background); display: flex; justify-content: center; align-items: center; flex-direction: column; gap: 20px; z-index: 100; color: var(--color-text-primary); }
+.book-loader button { background-color: var(--color-text-secondary); width: auto; min-width: 120px; }
 
 
 #status-container { text-align: center; margin-top: 15px; font-style: italic; min-height: 20px; color: var(--color-text-secondary); }
@@ -295,7 +312,6 @@ body.fullscreen-active .container {
 }
 .fullscreen-fleet {
     display: none;
-
 }
 body.fullscreen-active .main-header,
 body.fullscreen-active #instructions-container,
@@ -307,6 +323,7 @@ body.fullscreen-active #fleet-display {
 }
 
 @media (max-width: 768px) {
+    .controls-grid { grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); }
     .global-options-container {
         flex-direction: column;
         gap: 15px;

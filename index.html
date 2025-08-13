@@ -3,8 +3,8 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Battleships Solo v3.14</title>
-    <!-- Link to the external CSS file -->
+    <title>Battleships Solo v3.20</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
     <link rel="stylesheet" href="battleship-style.css">
 </head>
 <body>
@@ -46,12 +46,10 @@
                     <span id="loader-text"></span>
                 </div>
             </div>
-            <!-- Fleet display for fullscreen mode -->
             <div id="fleet-display-fs" class="fullscreen-fleet">
                 <h3>Fleet</h3>
                 <ul id="fleet-list-fs"></ul>
             </div>
-            <!-- Completion Modal moved inside game-board -->
             <div id="completion-modal">
                 <div class="modal-content">
                     <h2>Congratulations!</h2>
@@ -69,7 +67,6 @@
             <p><b>How to Play:</b> Find the hidden fleet of ships. The numbers show how many ship segments are in each row and column. Ships cannot touch, even at the corners. Click a cell to cycle: Empty ➔ Water ➔ Ship.</p>
         </div>
         
-        <!-- Fleet display for normal view -->
         <div id="fleet-display">
             <h3>Fleet</h3>
             <ul id="fleet-list"></ul>
@@ -90,6 +87,7 @@
                     <option value="easy" selected>Easy</option>
                     <option value="medium">Medium</option>
                     <option value="hard">Hard</option>
+                    <option value="expert">Expert</option>
                 </select>
             </div>
             <div class="option-group checkbox-group">
@@ -105,12 +103,46 @@
             <button id="restart-btn">Restart</button>
             <button id="hint-btn">Hint</button>
             <button id="check-btn">Check</button>
+            <button id="download-pdf-btn">Download as PDF</button>
+            <button id="make-book-btn">Make Book</button>
             <button id="reveal-btn">Reveal Solution</button>
+        </div>
+
+        <div id="generate-book-panel" class="panel">
+            <h3>Make a Puzzle Book</h3>
+            <div class="book-options-grid">
+                <label for="book-title-input">Book Title:</label>
+                <input type="text" id="book-title-input" placeholder="e.g., My Puzzle Book">
+                <label for="book-subtitle-input">Subtitle:</label>
+                <input type="text" id="book-subtitle-input" placeholder="e.g., By Alex Doe">
+                <label for="puzzle-count-input">Puzzles:</label>
+                <input type="number" id="puzzle-count-input" value="20" min="1" max="100">
+                <label for="puzzles-per-page-select">Puzzles/Page:</label>
+                <select id="puzzles-per-page-select">
+                    <option value="1">1</option>
+                    <option value="2" selected>2</option>
+                </select>
+                <label>Options:</label>
+                <div id="book-checkbox-options">
+                    <label><input type="checkbox" id="answer-key-checkbox" checked> Answer Key</label>
+                    <label><input type="checkbox" id="page-numbers-checkbox" checked> Page Numbers</label>
+                </div>
+            </div>
+            <div class="controls-grid">
+                <button id="create-book-btn">Create Book</button>
+                <button id="cancel-book-options-btn">Cancel</button>
+            </div>
         </div>
 
         <div id="status-container"><p id="source-status"></p></div>
     </div>
     
+    <div id="book-loader" class="book-loader hidden">
+        <div class="spinner"></div>
+        <span id="loader-text-book"></span>
+        <button id="cancel-book-generation-btn">Cancel</button>
+    </div>
+
     <script src="battleship-logic.js"></script>
 </body>
 </html>

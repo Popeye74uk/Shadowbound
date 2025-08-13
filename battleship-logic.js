@@ -1,11 +1,15 @@
 // Global UI element cache
 const ui = {
+    container: document.getElementById('container'),
     puzzleContainer: document.getElementById('puzzle-container'),
     gridContainer: document.getElementById('grid-container'),
     fleetList: document.getElementById('fleet-list'),
     fleetListFs: document.getElementById('fleet-list-fs'),
     loader: document.getElementById('loader'),
     loaderText: document.getElementById('loader-text'),
+    bookLoader: document.getElementById('book-loader'),
+    loaderTextBook: document.getElementById('loader-text-book'),
+    cancelBookGenerationBtn: document.getElementById('cancel-book-generation-btn'),
     gridSizeSelect: document.getElementById('grid-size-select'),
     difficultySelect: document.getElementById('difficulty-select'),
     mistakeModeCheckbox: document.getElementById('mistake-mode-checkbox'),
@@ -19,10 +23,15 @@ const ui = {
     finishBtn: document.getElementById('finish-btn'),
     undoBtn: document.getElementById('undo-btn'),
     restartBtn: document.getElementById('restart-btn'),
+    downloadPdfBtn: document.getElementById('download-pdf-btn'),
+    makeBookBtn: document.getElementById('make-book-btn'),
     status: document.getElementById('source-status'),
     themeToggleBtn: document.getElementById('theme-toggle-btn'),
     generateBtn: document.getElementById('generate-btn'),
     playAgainBtn: document.getElementById('play-again-btn'),
+    generateBookPanel: document.getElementById('generate-book-panel'),
+    createBookBtn: document.getElementById('create-book-btn'),
+    cancelBookOptionsBtn: document.getElementById('cancel-book-options-btn'),
 };
 
 // Game state variables
@@ -36,12 +45,13 @@ let hintedCells = [];
 let moveHistory = [];
 let puzzleSolvability = null;
 let selectedCell = { r: 0, c: 0 };
+let isGeneratingBook = false;
 
 // Game constants
 const FLEET_DEFINITIONS = {
-    8: { ships: [3, 2, 2, 1, 1, 1], clues: { easy: 20, medium: 15, hard: 10 } },
-    10: { ships: [4, 3, 3, 2, 2, 2, 1, 1, 1, 1], clues: { easy: 35, medium: 25, hard: 18 } },
-    12: { ships: [5, 4, 3, 3, 2, 2, 2, 1, 1, 1, 1], clues: { easy: 50, medium: 40, hard: 30 } }
+    8: { ships: [3, 2, 2, 1, 1, 1], clues: { easy: 22, medium: 16, hard: 12, expert: 8 } },
+    10: { ships: [4, 3, 3, 2, 2, 2, 1, 1, 1, 1], clues: { easy: 40, medium: 30, hard: 22, expert: 15 } },
+    12: { ships: [5, 4, 3, 3, 2, 2, 2, 1, 1, 1, 1], clues: { easy: 60, medium: 45, hard: 35, expert: 25 } }
 };
 const CELL_STATE = { EMPTY: 0, WATER: 1, SHIP: 2 };
 const SHIP_ID = 2;
@@ -330,6 +340,11 @@ function initEventListeners() {
     ui.checkBtn.addEventListener('click', checkWork);
     ui.undoBtn.addEventListener('click', undoMove);
     ui.restartBtn.addEventListener('click', restartPuzzle);
+    ui.downloadPdfBtn.addEventListener('click', downloadPdf);
+    ui.makeBookBtn.addEventListener('click', () => showPanel(ui.generateBookPanel));
+    ui.cancelBookOptionsBtn.addEventListener('click', hidePanel);
+    ui.createBookBtn.addEventListener('click', createAndDownloadBook);
+    ui.cancelBookGenerationBtn.addEventListener('click', () => { isGeneratingBook = false; });
     ui.playAgainBtn.addEventListener('click', generatePuzzle);
     ui.completionModal.addEventListener('click', hideCompletionModal);
     ui.gridSizeSelect.addEventListener('change', handleGlobalOptionChange);
@@ -562,21 +577,16 @@ function generatePuzzleData() {
     }
     allCells.sort(() => 0.5 - Math.random());
 
-    let playerGrid = Array(gridSize).fill(0).map(() => Array(gridSize).fill(CELL_STATE.EMPTY));
-    rClues.forEach((clue, r) => { if (clue === 0) { for (let c = 0; c < gridSize; c++) playerGrid[r][c] = CELL_STATE.WATER; } });
-    cClues.forEach((clue, c) => { if (clue === 0) { for (let r = 0; r < gridSize; r++) playerGrid[r][c] = CELL_STATE.WATER; } });
-
-    // Start with a full grid and remove clues
     let finalPlayerGrid = grid.map(row => row.map(cell => cell === SHIP_ID ? CELL_STATE.SHIP : CELL_STATE.WATER));
-    let removedCells = 0;
-    const totalCells = gridSize * gridSize;
-    const cluesToKeep = fleetConfig.clues[difficulty];
+    const cluesToKeepCount = fleetConfig.clues[difficulty];
+    let cellsToRemove = gridSize * gridSize - cluesToKeepCount;
 
     for(const cell of allCells) {
+        if(cellsToRemove <= 0) break;
+
         const {r, c} = cell;
         const originalState = finalPlayerGrid[r][c];
-        if(originalState === CELL_STATE.EMPTY) continue;
-
+        
         finalPlayerGrid[r][c] = CELL_STATE.EMPTY;
         
         const testPuzzle = {
@@ -585,15 +595,14 @@ function generatePuzzleData() {
         };
 
         if(!verifySolvability(testPuzzle)) {
-            // Removing this cell makes it unsolvable, so put it back
             finalPlayerGrid[r][c] = originalState;
         } else {
-            removedCells++;
+            cellsToRemove--;
         }
     }
     
-    // Final check for desired clue count (this is an approximation)
-    const finalClueCount = totalCells - removedCells;
+    rClues.forEach((clue, r) => { if (clue === 0) { for (let c = 0; c < gridSize; c++) finalPlayerGrid[r][c] = CELL_STATE.WATER; } });
+    cClues.forEach((clue, c) => { if (clue === 0) { for (let r = 0; r < gridSize; r++) finalPlayerGrid[r][c] = CELL_STATE.WATER; } });
 
     return {
         gridSize, fleet: fleetConfig.ships, solutionGrid: grid, ships: placedShips, rowClues: rClues, colClues: cClues, playerGrid: finalPlayerGrid
@@ -707,21 +716,20 @@ function giveHint() {
     ui.puzzleContainer.scrollIntoView({ behavior: 'smooth', block: 'start' });
 
     const solvedGrid = runSolver(JSON.parse(JSON.stringify(playerGrid)), rowClues, colClues);
-    let hintFound = false;
+    const possibleHints = [];
 
     for (let r = 0; r < gridSize; r++) {
         for (let c = 0; c < gridSize; c++) {
             if (playerGrid[r][c] === CELL_STATE.EMPTY && solvedGrid[r][c] !== CELL_STATE.EMPTY) {
-                playerGrid[r][c] = solvedGrid[r][c];
-                hintedCells.push({ r, c });
-                hintFound = true;
-                break;
+                possibleHints.push({ r, c, state: solvedGrid[r][c] });
             }
         }
-        if (hintFound) break;
     }
 
-    if (hintFound) {
+    if (possibleHints.length > 0) {
+        const hint = possibleHints[Math.floor(Math.random() * possibleHints.length)];
+        playerGrid[hint.r][hint.c] = hint.state;
+        hintedCells.push({ r: hint.r, c: hint.c });
         checkForFoundShips();
         updateGridDisplay();
     } else {
@@ -769,4 +777,213 @@ function toggleFullScreen() {
 function setTheme(theme) {
     document.body.classList.toggle('dark-mode', theme === 'dark');
     localStorage.setItem('theme', theme);
+}
+
+// --- PDF Generation ---
+function showPanel(panel) {
+    ui.mainControls.style.display = 'none';
+    ui.generateBookPanel.style.display = 'none';
+    if (panel) panel.style.display = 'block';
+}
+
+function hidePanel() {
+    ui.mainControls.style.display = 'grid';
+    ui.generateBookPanel.style.display = 'none';
+}
+
+function downloadPdf() {
+    if (!playerGrid) { alert("Please generate a puzzle first."); return; }
+    const { jsPDF } = window.jspdf;
+    const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
+    const puzzleData = {
+        grid: playerGrid,
+        rowClues: rowClues,
+        colClues: colClues,
+        gridSize: gridSize,
+        difficulty: difficulty.charAt(0).toUpperCase() + difficulty.slice(1)
+    };
+    drawPuzzlesOnPage(doc, [puzzleData], 0, { puzzlesPerPage: 1, includePageNumbers: false });
+    doc.save(`Battleships-${gridSize}x${gridSize}-${difficulty}.pdf`);
+}
+
+async function createAndDownloadBook() {
+    const bookOptions = {
+        title: document.getElementById('book-title-input').value.trim(),
+        subtitle: document.getElementById('book-subtitle-input').value.trim(),
+        puzzleCount: parseInt(document.getElementById('puzzle-count-input').value, 10),
+        puzzlesPerPage: parseInt(document.getElementById('puzzles-per-page-select').value, 10),
+        includeSolutions: document.getElementById('answer-key-checkbox').checked,
+        includePageNumbers: document.getElementById('page-numbers-checkbox').checked
+    };
+
+    if (isNaN(bookOptions.puzzleCount) || bookOptions.puzzleCount < 1 || bookOptions.puzzleCount > 100) { alert("Please enter a number of puzzles between 1 and 100."); return; }
+    
+    isGeneratingBook = true;
+    ui.container.style.display = 'none';
+    ui.bookLoader.classList.remove('hidden');
+
+    const { jsPDF } = window.jspdf;
+    const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
+    doc.deletePage(1);
+
+    const allPuzzlesData = [];
+    try {
+        for (let i = 1; i <= bookOptions.puzzleCount; i++) {
+            if (!isGeneratingBook) throw new Error("Cancelled");
+            ui.loaderTextBook.textContent = `Generating Puzzle ${i} of ${bookOptions.puzzleCount}...`;
+            await new Promise(r => setTimeout(r, 10)); 
+            const puzzleData = generatePuzzleData();
+            allPuzzlesData.push({
+                grid: puzzleData.playerGrid,
+                solutionGrid: puzzleData.solutionGrid,
+                rowClues: puzzleData.rowClues,
+                colClues: puzzleData.colClues,
+                gridSize: puzzleData.gridSize,
+                difficulty: difficulty.charAt(0).toUpperCase() + difficulty.slice(1)
+            });
+        }
+
+        ui.loaderTextBook.textContent = `Building PDF...`;
+        await new Promise(r => setTimeout(r, 10));
+
+        if (bookOptions.title) {
+            doc.addPage();
+            const pageW = doc.internal.pageSize.getWidth(), pageH = doc.internal.pageSize.getHeight();
+            doc.setFont('helvetica', 'bold').setFontSize(30).text(bookOptions.title, pageW/2, pageH/2 - 10, {align: 'center'});
+            if (bookOptions.subtitle) doc.setFont('helvetica', 'normal').setFontSize(16).text(bookOptions.subtitle, pageW/2, pageH/2 + 5, {align: 'center'});
+        }
+
+        for (let i = 0; i < allPuzzlesData.length; i += bookOptions.puzzlesPerPage) {
+            if (!isGeneratingBook) throw new Error("Cancelled");
+            doc.addPage();
+            drawPuzzlesOnPage(doc, allPuzzlesData, i, bookOptions);
+        }
+        
+        if (bookOptions.includeSolutions) {
+            if (!isGeneratingBook) throw new Error("Cancelled");
+            ui.loaderTextBook.textContent = "Generating Answer Key...";
+            await new Promise(r => setTimeout(r, 50));
+            drawAnswerKeyPage(doc, allPuzzlesData);
+        }
+        
+        const safeTitle = (bookOptions.title.replace(/[^a-zA-Z0-9]/g, '-') || `Battleships-Book`).substring(0, 50);
+        doc.save(`${safeTitle}.pdf`);
+        ui.status.textContent = "Book successfully generated!";
+
+    } catch (error) {
+        ui.status.textContent = `Error: ${error.message === "Cancelled" ? "Book generation cancelled." : error.message}`;
+    } finally {
+        isGeneratingBook = false;
+        ui.container.style.display = '';
+        ui.bookLoader.classList.add('hidden');
+        setUiLoading(false);
+        hidePanel();
+    }
+}
+
+function drawSingleBattleshipsGrid(doc, puzzleData, startX, startY, gridTotalSize, showSolution = false) {
+    const {grid, rowClues, colClues, gridSize, solutionGrid} = puzzleData;
+    const fullGridSize = gridSize + 1;
+    const cellSize = gridTotalSize / fullGridSize;
+    const fontSize = (cellSize * 0.6) / 0.352778; 
+    
+    doc.setFont('helvetica', 'bold').setFontSize(fontSize).setTextColor(0,0,0);
+
+    for(let i=0; i<gridSize; i++){
+        doc.text(String(colClues[i]), startX + (i + 1.5) * cellSize, startY + cellSize * 0.5, { align: 'center', baseline: 'middle' });
+        doc.text(String(rowClues[i]), startX + cellSize * 0.5, startY + (i + 1.5) * cellSize, { align: 'center', baseline: 'middle' });
+    }
+    
+    const gridToDraw = showSolution ? solutionGrid.map(row => row.map(cell => cell === SHIP_ID ? CELL_STATE.SHIP : CELL_STATE.WATER)) : grid;
+
+    for (let r = 0; r < gridSize; r++) {
+        for (let c = 0; c < gridSize; c++) {
+            const cellX = startX + (c + 1) * cellSize;
+            const cellY = startY + (r + 1) * cellSize;
+            const state = gridToDraw[r][c];
+
+            if(state === CELL_STATE.WATER) {
+                doc.setFillColor(224, 224, 224); // Light grey
+                doc.rect(cellX, cellY, cellSize, cellSize, 'F');
+            } else if (state === CELL_STATE.SHIP) {
+                 doc.setFillColor(0, 0, 0); // Black
+                 doc.rect(cellX + cellSize * 0.2, cellY + cellSize * 0.2, cellSize * 0.6, cellSize * 0.6, 'F');
+            }
+        }
+    }
+    
+    doc.setDrawColor(0,0,0);
+    for (let i = 0; i <= fullGridSize; i++) {
+        const isThick = i === 0 || i === fullGridSize || i === 1;
+        doc.setLineWidth(isThick ? 0.4 : 0.2);
+        doc.line(startX, startY + i * cellSize, startX + gridTotalSize, startY + i * cellSize);
+        doc.line(startX + i * cellSize, startY, startX + i * cellSize, startY + gridTotalSize);
+    }
+}
+
+function drawPuzzlesOnPage(doc, puzzles, startIndex, options) {
+    const { puzzlesPerPage, includePageNumbers } = options;
+    const pageW = doc.internal.pageSize.getWidth(), pageH = doc.internal.pageSize.getHeight(), margin = 20, cornerRadius = 3;
+    const layouts = {
+        1: [{ x: (pageW - 120) / 2, y: 40, size: 120 }],
+        2: [{ x: (pageW - 90) / 2, y: 25, size: 90 }, { x: (pageW - 90) / 2, y: 155, size: 90 }],
+    };
+    const layout = layouts[puzzlesPerPage] || layouts[1];
+
+    for (let i = 0; i < puzzlesPerPage; i++) {
+        const puzzleIndex = startIndex + i;
+        if (puzzleIndex >= puzzles.length) break;
+        const puzzleData = puzzles[puzzleIndex];
+        const { x, y, size } = layout[i];
+        
+        const containerPadding = 3;
+        const totalContainerHeight = size + (containerPadding * 2);
+        const totalContainerWidth = size + (containerPadding * 2);
+        const containerX = x - containerPadding;
+        const containerY = y - containerPadding - 10;
+        const titleText = `Puzzle ${puzzleIndex + 1}`;
+
+        doc.setFont('helvetica', 'bold').setFontSize(12).text(titleText, containerX + totalContainerWidth / 2, containerY + 6, { align: 'center' });
+        doc.setFont('helvetica', 'normal').setFontSize(9).text(`Difficulty: ${puzzleData.difficulty}`, containerX + totalContainerWidth / 2, containerY + 11, { align: 'center' });
+        doc.setDrawColor(0).setLineWidth(0.6).roundedRect(containerX, containerY, totalContainerWidth, totalContainerHeight + 10, cornerRadius, cornerRadius, 'S');
+        
+        drawSingleBattleshipsGrid(doc, puzzleData, x, y, size, false);
+    }
+
+    if (includePageNumbers) doc.setFont('helvetica', 'normal').setFontSize(8).text(String(Math.floor(startIndex / puzzlesPerPage) + 1), pageW / 2, pageH - 10, { align: 'center' });
+}
+
+function drawAnswerKeyPage(doc, allPuzzlesData) {
+    doc.addPage();
+    const pageW = doc.internal.pageSize.getWidth();
+    const margin = 15;
+    doc.setFont('helvetica', 'bold').setFontSize(20).text("Answer Key", pageW / 2, margin, { align: 'center' });
+
+    const puzzlesPerPage = 6;
+    const cols = 2;
+    const rows = 3;
+    const cellW = (pageW - margin * 2) / cols;
+    const cellH = (doc.internal.pageSize.getHeight() - margin * 2 - 10) / rows;
+
+    allPuzzlesData.forEach((puzzleData, index) => {
+        if (index > 0 && index % puzzlesPerPage === 0) {
+            doc.addPage();
+            doc.setFont('helvetica', 'bold').setFontSize(20).text("Answer Key", pageW / 2, margin, { align: 'center' });
+        }
+
+        const puzzleNumber = index + 1;
+        const i = index % puzzlesPerPage;
+        const col = i % cols;
+        const row = Math.floor(i / cols);
+        const startX = margin + col * cellW;
+        const startY = margin + 10 + row * cellH;
+
+        doc.setFont('helvetica', 'bold').setFontSize(10).text(`Puzzle ${puzzleNumber}`, startX + cellW / 2, startY + 8, { align: 'center' });
+
+        const gridTotalSize = Math.min(cellW * 0.7, cellH * 0.7);
+        const gridStartX = startX + (cellW - gridTotalSize) / 2;
+        const gridStartY = startY + 12;
+
+        drawSingleBattleshipsGrid(doc, puzzleData, gridStartX, gridStartY, gridTotalSize, true);
+    });
 }
