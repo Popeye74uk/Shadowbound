@@ -18,6 +18,7 @@ const ui = {
     checkBtn: document.getElementById('check-btn'),
     finishBtn: document.getElementById('finish-btn'),
     undoBtn: document.getElementById('undo-btn'),
+    restartBtn: document.getElementById('restart-btn'),
     status: document.getElementById('source-status'),
     themeToggleBtn: document.getElementById('theme-toggle-btn'),
     generateBtn: document.getElementById('generate-btn'),
@@ -26,7 +27,7 @@ const ui = {
 
 // Game state variables
 let gridSize, difficulty, fleetConfig;
-let solutionGrid, playerGrid, ships, rowClues, colClues;
+let solutionGrid, playerGrid, ships, rowClues, colClues, initialPlayerGrid;
 let debounceTimeout;
 let startTime, puzzleConfigKey;
 let highlightedLine;
@@ -34,12 +35,13 @@ let foundShips = new Set();
 let hintedCells = [];
 let moveHistory = [];
 let puzzleSolvability = null;
+let selectedCell = { r: 0, c: 0 };
 
 // Game constants
 const FLEET_DEFINITIONS = {
-    8: { ships: [3, 2, 2, 1, 1, 1], hints: { easy: 6, medium: 3, hard: 0 } },
-    10: { ships: [4, 3, 3, 2, 2, 2, 1, 1, 1, 1], hints: { easy: 10, medium: 5, hard: 0 } },
-    12: { ships: [5, 4, 3, 3, 2, 2, 2, 1, 1, 1, 1], hints: { easy: 15, medium: 8, hard: 0 } }
+    8: { ships: [3, 2, 2, 1, 1, 1], clues: { easy: 20, medium: 15, hard: 10 } },
+    10: { ships: [4, 3, 3, 2, 2, 2, 1, 1, 1, 1], clues: { easy: 35, medium: 25, hard: 18 } },
+    12: { ships: [5, 4, 3, 3, 2, 2, 2, 1, 1, 1, 1], clues: { easy: 50, medium: 40, hard: 30 } }
 };
 const CELL_STATE = { EMPTY: 0, WATER: 1, SHIP: 2 };
 const SHIP_ID = 2;
@@ -49,45 +51,46 @@ const SHIP_ID = 2;
  */
 function generatePuzzle() {
     setUiLoading(true, 'Generating a fair puzzle...');
-    puzzleSolvability = null;
-    hideCompletionModal();
-    highlightedLine = { type: null, index: null };
-    foundShips.clear();
-    hintedCells = [];
-    moveHistory = [];
-    updateUndoButton();
-    startTime = Date.now();
-    ui.hintBtn.disabled = false;
-    ui.revealBtn.disabled = false;
-    ui.finishBtn.disabled = false;
     
     setTimeout(() => {
         try {
-            // This function now guarantees a solvable puzzle
             const puzzleData = generatePuzzleData();
-            puzzleSolvability = true; // We know it's solvable
+            
+            puzzleSolvability = true;
+            hideCompletionModal();
+            highlightedLine = { type: null, index: null };
+            foundShips.clear();
+            hintedCells = [];
+            moveHistory = [];
+            selectedCell = { r: 0, c: 0 };
+            updateUndoButton();
+            ui.hintBtn.disabled = false;
+            ui.revealBtn.disabled = false;
+            ui.finishBtn.disabled = false;
 
             solutionGrid = puzzleData.solutionGrid;
             ships = puzzleData.ships;
             rowClues = puzzleData.rowClues;
             colClues = puzzleData.colClues;
             playerGrid = puzzleData.playerGrid;
+            initialPlayerGrid = JSON.parse(JSON.stringify(puzzleData.playerGrid));
+            startTime = Date.now();
 
             puzzleConfigKey = `battleship-${gridSize}-${difficulty}`;
             ui.status.textContent = `Grid: ${gridSize}x${gridSize} | Difficulty: ${difficulty.charAt(0).toUpperCase() + difficulty.slice(1)}`;
-            
-            checkForFoundShips(); 
+
+            checkForFoundShips();
             updateGridDisplay();
             setUiLoading(false);
         } catch (error) {
-            ui.status.textContent = `Error: ${error.message}`;
+            ui.status.textContent = `Error: ${error.message}. Please try again.`;
             setUiLoading(false);
         }
     }, 10);
 }
 
 /**
- * Renders the game grid. Icons are placeholders until the game is won.
+ * Renders the game grid.
  */
 function updateGridDisplay(isFinished = false, errorCells = [], isFailedAttempt = false) {
     const isFullscreen = !!document.fullscreenElement;
@@ -99,7 +102,7 @@ function updateGridDisplay(isFinished = false, errorCells = [], isFailedAttempt 
             containerSize = window.innerWidth * 0.9;
         } else {
             const availableHeight = window.innerHeight * 0.85;
-            const availableWidth = (window.innerWidth - 200 - 80); 
+            const availableWidth = (window.innerWidth - 200 - 80);
             containerSize = Math.min(availableHeight, availableWidth);
         }
     } else {
@@ -109,7 +112,7 @@ function updateGridDisplay(isFinished = false, errorCells = [], isFailedAttempt 
     if (containerSize === 0) return;
 
     const fullGridSize = gridSize + 1;
-    const gap = 1; 
+    const gap = 1;
     const totalGapSize = (fullGridSize - 1) * gap;
     const cellSize = Math.floor((containerSize - totalGapSize) / fullGridSize);
     const totalGridWidth = (fullGridSize * cellSize) + totalGapSize;
@@ -122,71 +125,71 @@ function updateGridDisplay(isFinished = false, errorCells = [], isFailedAttempt 
 
     const playerRowCounts = Array(gridSize).fill(0);
     const playerColCounts = Array(gridSize).fill(0);
-    for (let r=0; r < gridSize; r++) {
-        for(let c=0; c < gridSize; c++) {
+    for (let r = 0; r < gridSize; r++) {
+        for (let c = 0; c < gridSize; c++) {
             if (playerGrid[r][c] === CELL_STATE.SHIP) {
                 playerRowCounts[r]++;
                 playerColCounts[c]++;
             }
         }
     }
-    
-    // Auto-fill completed lines
-    for(let r=0; r<gridSize; r++) {
-        if (playerRowCounts[r] === rowClues[r] && rowClues[r] > 0) {
-            for(let c=0; c<gridSize; c++) { if(playerGrid[r][c] === CELL_STATE.EMPTY) playerGrid[r][c] = CELL_STATE.WATER; }
-        }
-    }
-    for(let c=0; c<gridSize; c++) {
-        if (playerColCounts[c] === colClues[c] && colClues[c] > 0) {
-            for(let r=0; r<gridSize; r++) { if(playerGrid[r][c] === CELL_STATE.EMPTY) playerGrid[r][c] = CELL_STATE.WATER; }
-        }
-    }
 
+    const autoFilledWaterCells = new Set();
+    for (let r = 0; r < gridSize; r++) {
+        if (playerRowCounts[r] === rowClues[r] && rowClues[r] > 0) {
+            for (let c = 0; c < gridSize; c++) {
+                if (playerGrid[r][c] === CELL_STATE.EMPTY) autoFilledWaterCells.add(`${r},${c}`);
+            }
+        }
+    }
+    for (let c = 0; c < gridSize; c++) {
+        if (playerColCounts[c] === colClues[c] && colClues[c] > 0) {
+            for (let r = 0; r < gridSize; r++) {
+                if (playerGrid[r][c] === CELL_STATE.EMPTY) autoFilledWaterCells.add(`${r},${c}`);
+            }
+        }
+    }
 
     for (let r = 0; r < fullGridSize; r++) {
         for (let c = 0; c < fullGridSize; c++) {
             const cell = document.createElement('div');
             const isHighlighted = (highlightedLine.type === 'row' && highlightedLine.index === r - 1) || (highlightedLine.type === 'col' && highlightedLine.index === c - 1);
 
-            if (r === 0 && c > 0) { // Column clues
+            if (r === 0 && c > 0) {
                 cell.className = 'grid-cell clue-cell';
                 cell.textContent = colClues[c - 1];
                 cell.dataset.clueType = 'col';
                 cell.dataset.clueIndex = c - 1;
-                if (playerColCounts[c - 1] === colClues[c - 1] && colClues[c-1] !== 0) cell.classList.add('satisfied');
+                if (playerColCounts[c - 1] === colClues[c - 1] && colClues[c - 1] !== 0) cell.classList.add('satisfied');
                 if (isHighlighted) cell.classList.add('highlight');
-            } else if (c === 0 && r > 0) { // Row clues
+            } else if (c === 0 && r > 0) {
                 cell.className = 'grid-cell clue-cell';
                 cell.textContent = rowClues[r - 1];
                 cell.dataset.clueType = 'row';
                 cell.dataset.clueIndex = r - 1;
-                if (playerRowCounts[r - 1] === rowClues[r - 1] && rowClues[r-1] !== 0) cell.classList.add('satisfied');
+                if (playerRowCounts[r - 1] === rowClues[r - 1] && rowClues[r - 1] !== 0) cell.classList.add('satisfied');
                 if (isHighlighted) cell.classList.add('highlight');
-            } else if (r > 0 && c > 0) { // Game cells
+            } else if (r > 0 && c > 0) {
                 const gridR = r - 1;
                 const gridC = c - 1;
                 cell.className = 'grid-cell game-cell';
                 cell.dataset.r = gridR;
                 cell.dataset.c = gridC;
+                if (gridR === selectedCell.r && gridC === selectedCell.c) cell.classList.add('selected-cell');
                 if (isHighlighted) cell.classList.add('highlight');
-                if (errorCells.some(e => e.r === gridR && e.c === gridC)) {
-                    cell.classList.add('error-cell');
-                }
-                if (hintedCells.some(h => h.r === gridR && h.c === gridC)) {
-                    cell.classList.add('hint-cell');
-                }
-                
-                const state = playerGrid[gridR][gridC];
-                if (state === CELL_STATE.WATER) {
-                    cell.classList.add('water');
+                if (errorCells.some(e => e.r === gridR && e.c === gridC)) cell.classList.add('error-cell');
+                if (hintedCells.some(h => h.r === gridR && h.c === gridC)) cell.classList.add('hint-cell');
 
+                const state = playerGrid[gridR][gridC];
+                const isAutoFilled = autoFilledWaterCells.has(`${gridR},${gridC}`);
+
+                if (state === CELL_STATE.WATER || isAutoFilled) {
+                    cell.classList.add('water');
                 } else if (state === CELL_STATE.SHIP) {
                     cell.classList.add('ship');
-                    
                     if (isFinished) {
-                         const { part, rotation } = getSunkShipSegments().get(`${gridR},${gridC}`) || {};
-                         if(part) {
+                        const { part, rotation } = getSunkShipSegments().get(`${gridR},${gridC}`) || {};
+                        if (part) {
                             cell.classList.add(isFailedAttempt ? 'revealed-fail' : 'revealed');
                             const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
                             svg.setAttribute("class", "ship-segment-icon");
@@ -196,18 +199,18 @@ function updateGridDisplay(isFinished = false, errorCells = [], isFailedAttempt 
                             use.setAttributeNS(null, "href", `#ship-${part}`);
                             svg.appendChild(use);
                             cell.appendChild(svg);
-                         } else {
-                             const placeholder = document.createElement('div');
-                             placeholder.className = 'ship-segment-placeholder';
-                             cell.appendChild(placeholder);
-                         }
+                        } else {
+                            const placeholder = document.createElement('div');
+                            placeholder.className = 'ship-segment-placeholder';
+                            cell.appendChild(placeholder);
+                        }
                     } else {
-                         const placeholder = document.createElement('div');
-                         placeholder.className = 'ship-segment-placeholder';
-                         cell.appendChild(placeholder);
+                        const placeholder = document.createElement('div');
+                        placeholder.className = 'ship-segment-placeholder';
+                        cell.appendChild(placeholder);
                     }
                 }
-            } else { // Top-left corner
+            } else {
                 cell.className = 'grid-cell solvability-cell';
                 if (puzzleSolvability === true) {
                     cell.innerHTML = `<span class="solvable-tick">✓</span>`;
@@ -220,56 +223,37 @@ function updateGridDisplay(isFinished = false, errorCells = [], isFailedAttempt 
     }
 }
 
-/**
- * Handles clicks on any cell in the grid container.
- */
 function handleGridClick(e) {
     const cell = e.target.closest('.grid-cell');
     if (!cell) return;
-
-    if (cell.classList.contains('game-cell')) {
-        handleGameCellClick(cell);
-    } else if (cell.classList.contains('clue-cell')) {
-        handleClueCellClick(cell);
-    }
+    if (cell.classList.contains('game-cell')) handleGameCellClick(cell);
+    else if (cell.classList.contains('clue-cell')) handleClueCellClick(cell);
 }
 
-/**
- * Handles clicks on game cells to cycle their state.
- */
 function handleGameCellClick(cell) {
     if (startTime === null) return;
     const r = parseInt(cell.dataset.r);
     const c = parseInt(cell.dataset.c);
-    
+    selectedCell.r = r;
+    selectedCell.c = c;
     let currentState = playerGrid[r][c];
     let nextState = (currentState + 1) % 3;
-    
     if (ui.mistakeModeCheckbox.checked && nextState === CELL_STATE.SHIP && solutionGrid[r][c] !== SHIP_ID) {
-        cell.classList.add('error-flash'); 
+        cell.classList.add('error-flash');
         return;
     }
     cell.classList.remove('error-flash');
-
-    moveHistory.push({r, c, previousState: currentState});
-    if (moveHistory.length > 3) {
-        moveHistory.shift();
-    }
+    moveHistory.push({ r, c, previousState: currentState });
+    if (moveHistory.length > 10) moveHistory.shift();
     updateUndoButton();
-
     playerGrid[r][c] = nextState;
-    
     checkForFoundShips();
     updateGridDisplay();
 }
 
-/**
- * Handles clicks on clue cells to toggle focus highlight.
- */
 function handleClueCellClick(cell) {
     const type = cell.dataset.clueType;
     const index = parseInt(cell.dataset.clueIndex);
-
     if (highlightedLine.type === type && highlightedLine.index === index) {
         highlightedLine.type = null;
         highlightedLine.index = null;
@@ -281,9 +265,9 @@ function handleClueCellClick(cell) {
 }
 
 function checkSolution() {
+    ui.puzzleContainer.scrollIntoView({ behavior: 'smooth', block: 'start' });
     let isCorrect = true;
     const errorCells = [];
-
     for (let r = 0; r < gridSize; r++) {
         for (let c = 0; c < gridSize; c++) {
             const playerAnswer = playerGrid[r][c] === CELL_STATE.SHIP ? SHIP_ID : 0;
@@ -294,20 +278,21 @@ function checkSolution() {
             }
         }
     }
-
-    startTime = null;
-    ui.finishBtn.disabled = true;
-    ui.hintBtn.disabled = true;
-
     if (isCorrect) {
-        const elapsedTime = Date.now() - (startTime || Date.now());
+        const elapsedTime = Date.now() - startTime;
+        startTime = null;
+        ui.finishBtn.disabled = true;
+        ui.hintBtn.disabled = true;
         handlePuzzleCompletion(elapsedTime);
         updateGridDisplay(true, [], false);
         updateFleetDisplay();
     } else {
+        startTime = null;
+        ui.finishBtn.disabled = true;
+        ui.hintBtn.disabled = true;
         playerGrid = solutionGrid.map(row => row.map(cell => cell === SHIP_ID ? CELL_STATE.SHIP : CELL_STATE.WATER));
         updateGridDisplay(true, errorCells, false);
-        checkForFoundShips(true); 
+        checkForFoundShips(true);
     }
 }
 
@@ -317,25 +302,22 @@ function checkWork() {
     for (let r = 0; r < gridSize; r++) {
         for (let c = 0; c < gridSize; c++) {
             if (playerGrid[r][c] === CELL_STATE.SHIP && solutionGrid[r][c] !== SHIP_ID) {
-                errorCells.push({r, c});
+                errorCells.push({ r, c });
             }
         }
     }
-
     if (errorCells.length > 0) {
-        errorCells.forEach(({r, c}) => {
+        errorCells.forEach(({ r, c }) => {
             const cellEl = ui.gridContainer.querySelector(`[data-r='${r}'][data-c='${c}']`);
             if (cellEl) {
                 cellEl.classList.add('check-work-error');
-                setTimeout(() => {
-                    cellEl.classList.remove('check-work-error');
-                }, 2500);
+                setTimeout(() => cellEl.classList.remove('check-work-error'), 2500);
             }
         });
     } else {
         ui.status.textContent = 'No mistakes found in your ship placements so far!';
         setTimeout(() => {
-             ui.status.textContent = `Grid: ${gridSize}x${gridSize} | Difficulty: ${difficulty.charAt(0).toUpperCase() + difficulty.slice(1)}`;
+            ui.status.textContent = `Grid: ${gridSize}x${gridSize} | Difficulty: ${difficulty.charAt(0).toUpperCase() + difficulty.slice(1)}`;
         }, 2000);
     }
 }
@@ -345,12 +327,9 @@ function initEventListeners() {
     ui.hintBtn.addEventListener('click', giveHint);
     ui.revealBtn.addEventListener('click', () => revealSolution(false));
     ui.finishBtn.addEventListener('click', checkSolution);
-    if (ui.checkBtn) {
-        ui.checkBtn.addEventListener('click', checkWork);
-    }
-    if (ui.undoBtn) {
-        ui.undoBtn.addEventListener('click', undoMove);
-    }
+    ui.checkBtn.addEventListener('click', checkWork);
+    ui.undoBtn.addEventListener('click', undoMove);
+    ui.restartBtn.addEventListener('click', restartPuzzle);
     ui.playAgainBtn.addEventListener('click', generatePuzzle);
     ui.completionModal.addEventListener('click', hideCompletionModal);
     ui.gridSizeSelect.addEventListener('change', handleGlobalOptionChange);
@@ -364,15 +343,38 @@ function initEventListeners() {
         clearTimeout(debounceTimeout);
         debounceTimeout = setTimeout(updateGridDisplay, 100);
     });
-    
+
     document.addEventListener('keydown', (e) => {
-        if (e.target.tagName === 'INPUT' || e.target.tagName === 'SELECT' || e.target.tagName === 'TEXTAREA') return;
-        switch(e.key.toLowerCase()) {
-            case 'f': e.preventDefault(); toggleFullScreen(); break;
-            case 'n': e.preventDefault(); generatePuzzle(); break;
-            case 'h': e.preventDefault(); giveHint(); break;
-            case 'e': e.preventDefault(); checkSolution(); break;
-            case 'u': e.preventDefault(); undoMove(); break;
+        if (e.key.toLowerCase() === 'f') {
+            e.preventDefault();
+            toggleFullScreen();
+            return;
+        }
+        if (e.target.tagName === 'INPUT' || e.target.tagName === 'SELECT' || e.target.tagName === 'TEXTAREA' || startTime === null) return;
+
+        let handled = true;
+        switch (e.key.toLowerCase()) {
+            case 'n': generatePuzzle(); break;
+            case 'h': giveHint(); break;
+            case 'e': checkSolution(); break;
+            case 'u': undoMove(); break;
+            case 'c': checkWork(); break;
+            case 'arrowup': selectedCell.r = Math.max(0, selectedCell.r - 1); break;
+            case 'arrowdown': selectedCell.r = Math.min(gridSize - 1, selectedCell.r + 1); break;
+            case 'arrowleft': selectedCell.c = Math.max(0, selectedCell.c - 1); break;
+            case 'arrowright': selectedCell.c = Math.min(gridSize - 1, selectedCell.c + 1); break;
+            case ' ':
+                const cell = ui.gridContainer.querySelector(`[data-r='${selectedCell.r}'][data-c='${selectedCell.c}']`);
+                if (cell) handleGameCellClick(cell);
+                break;
+            default: handled = false;
+        }
+
+        if (handled) {
+            e.preventDefault();
+            if (['arrowup', 'arrowdown', 'arrowleft', 'arrowright', ' '].includes(e.key.toLowerCase())) {
+                updateGridDisplay();
+            }
         }
     });
 }
@@ -383,27 +385,19 @@ window.addEventListener('load', () => {
     setTheme(savedTheme || (prefersDark ? 'dark' : 'light'));
     const isMobile = /Mobi/i.test(navigator.userAgent);
     if (isMobile) { ui.fullscreenBtn.style.display = 'none'; }
-    
     initEventListeners();
     setTimeout(generatePuzzle, 0);
 });
 
-// --- Solver and Verification Functions ---
-/**
- * Runs a logical solver on a grid.
- */
 function runSolver(grid, rowClues, colClues) {
     const size = grid.length;
     let changedInPass = true;
-
     while (changedInPass) {
         changedInPass = false;
-
         const rowShipCount = Array(size).fill(0);
         const colShipCount = Array(size).fill(0);
         const rowEmptyCount = Array(size).fill(0);
         const colEmptyCount = Array(size).fill(0);
-
         for (let r = 0; r < size; r++) {
             for (let c = 0; c < size; c++) {
                 if (grid[r][c] === CELL_STATE.SHIP) {
@@ -415,17 +409,13 @@ function runSolver(grid, rowClues, colClues) {
                 }
             }
         }
-
         for (let i = 0; i < size; i++) {
-            // Rule: Fill completed rows/cols with WATER
             if (rowShipCount[i] === rowClues[i]) {
                 for (let c = 0; c < size; c++) if (grid[i][c] === CELL_STATE.EMPTY) { grid[i][c] = CELL_STATE.WATER; changedInPass = true; }
             }
             if (colShipCount[i] === colClues[i]) {
                 for (let r = 0; r < size; r++) if (grid[r][i] === CELL_STATE.EMPTY) { grid[r][i] = CELL_STATE.WATER; changedInPass = true; }
             }
-            
-            // Rule: Fill remaining empty cells with SHIPS if count matches clue
             if (rowShipCount[i] + rowEmptyCount[i] === rowClues[i]) {
                 for (let c = 0; c < size; c++) if (grid[i][c] === CELL_STATE.EMPTY) { grid[i][c] = CELL_STATE.SHIP; changedInPass = true; }
             }
@@ -433,8 +423,6 @@ function runSolver(grid, rowClues, colClues) {
                 for (let r = 0; r < size; r++) if (grid[r][i] === CELL_STATE.EMPTY) { grid[r][i] = CELL_STATE.SHIP; changedInPass = true; }
             }
         }
-
-        // Rule: Mark water around all SHIP cells (diagonals)
         for (let r = 0; r < size; r++) {
             for (let c = 0; c < size; c++) {
                 if (grid[r][c] === CELL_STATE.SHIP) {
@@ -443,8 +431,7 @@ function runSolver(grid, rowClues, colClues) {
                             const nr = r + dr;
                             const nc = c + dc;
                             if (nr >= 0 && nr < size && nc >= 0 && nc < size && grid[nr][nc] === CELL_STATE.EMPTY) {
-                                grid[nr][nc] = CELL_STATE.WATER;
-                                changedInPass = true;
+                                grid[nr][nc] = CELL_STATE.WATER; changedInPass = true;
                             }
                         }
                     }
@@ -455,28 +442,31 @@ function runSolver(grid, rowClues, colClues) {
     return grid;
 }
 
-/**
- * Verifies if a puzzle is logically solvable.
- */
 function verifySolvability(puzzle) {
-    // Important: Use a deep copy of the grid so the original is not modified.
     const solverGrid = JSON.parse(JSON.stringify(puzzle.playerGrid));
     const solvedGrid = runSolver(solverGrid, puzzle.rowClues, puzzle.colClues);
-
     for (let r = 0; r < puzzle.gridSize; r++) {
         for (let c = 0; c < puzzle.gridSize; c++) {
             const solverCell = solvedGrid[r][c] === CELL_STATE.SHIP ? SHIP_ID : 0;
             const solutionCell = puzzle.solutionGrid[r][c];
-            if (solverCell !== solutionCell) {
-                return false; // Mismatch found, requires guessing
-            }
+            if (solverCell !== solutionCell) return false;
         }
     }
-    return true; // All cells match, logically solvable
+    return true;
 }
 
+function restartPuzzle() {
+    if (!initialPlayerGrid) return;
+    playerGrid = JSON.parse(JSON.stringify(initialPlayerGrid));
+    moveHistory = [];
+    hintedCells = [];
+    startTime = Date.now();
+    updateUndoButton();
+    checkForFoundShips();
+    updateGridDisplay();
+    ui.puzzleContainer.scrollIntoView({ behavior: 'smooth' });
+}
 
-// --- Utility and Helper Functions ---
 function undoMove() {
     if (moveHistory.length === 0) return;
     const lastMove = moveHistory.pop();
@@ -546,81 +536,70 @@ function placeShipsOnGrid() {
 
 function generatePuzzleData() {
     updatePuzzleParameters();
-    let generationAttempts = 0;
+    
+    let placedShipsResult = null;
+    while(placedShipsResult === null) {
+        placedShipsResult = placeShipsOnGrid();
+    }
 
-    // Loop until a solvable puzzle is generated
-    while (generationAttempts < 200) { // Safety break after 200 tries
-        generationAttempts++;
-        const placedShipsResult = placeShipsOnGrid();
-        if (!placedShipsResult) continue; // Failed to place ships, try again
-
-        const { grid, ships: placedShips } = placedShipsResult;
-
-        const rClues = Array(gridSize).fill(0);
-        const cClues = Array(gridSize).fill(0);
-        for (let r = 0; r < gridSize; r++) {
-            for (let c = 0; c < gridSize; c++) {
-                if (grid[r][c] === SHIP_ID) {
-                    rClues[r]++;
-                    cClues[c]++;
-                }
+    const { grid, ships: placedShips } = placedShipsResult;
+    const rClues = Array(gridSize).fill(0);
+    const cClues = Array(gridSize).fill(0);
+    for (let r = 0; r < gridSize; r++) {
+        for (let c = 0; c < gridSize; c++) {
+            if (grid[r][c] === SHIP_ID) {
+                rClues[r]++;
+                cClues[c]++;
             }
         }
-
-        const tempPlayerGrid = Array(gridSize).fill(0).map(() => Array(gridSize).fill(CELL_STATE.EMPTY));
-        rClues.forEach((clue, r) => {
-            if (clue === 0) {
-                for (let c = 0; c < gridSize; c++) tempPlayerGrid[r][c] = CELL_STATE.WATER;
-            }
-        });
-        cClues.forEach((clue, c) => {
-            if (clue === 0) {
-                for (let r = 0; r < gridSize; r++) tempPlayerGrid[r][c] = CELL_STATE.WATER;
-            }
-        });
-
-        const initialHints = [];
-        const hintCount = fleetConfig.hints[difficulty];
-        const possibleHintCells = [];
-        for (let r = 0; r < gridSize; r++) {
-            for (let c = 0; c < gridSize; c++) {
-                if (tempPlayerGrid[r][c] === CELL_STATE.EMPTY) {
-                    possibleHintCells.push({r, c});
-                }
-            }
-        }
-
-        possibleHintCells.sort(() => 0.5 - Math.random());
-        for(let i=0; i < hintCount && i < possibleHintCells.length; i++) {
-            const {r, c} = possibleHintCells[i];
-            initialHints.push({ r, c, type: grid[r][c] === SHIP_ID ? 'ship' : 'water' });
-        }
-
-        initialHints.forEach(hint => {
-            tempPlayerGrid[hint.r][hint.c] = hint.type === 'ship' ? CELL_STATE.SHIP : CELL_STATE.WATER;
-        });
-        
-        // Verify if the generated puzzle is solvable with the current solver
-        const verificationPuzzle = {
-            playerGrid: tempPlayerGrid,
-            rowClues: rClues,
-            colClues: cClues,
-            solutionGrid: grid,
-            gridSize: gridSize
-        };
-
-        if (verifySolvability(verificationPuzzle)) {
-            // Found a solvable puzzle, return it
-            return {
-                gridSize, fleet: fleetConfig.ships, solutionGrid: grid, ships: placedShips, rowClues: rClues, colClues: cClues, playerGrid: tempPlayerGrid
-            };
-        }
-        // If not solvable, the loop will continue and try again
     }
     
-    // If the loop finishes without returning, we failed to generate a solvable puzzle
-    throw new Error(`Failed to generate a solvable puzzle. Please try a lower difficulty.`);
+    const allCells = [];
+    for(let r=0; r<gridSize; r++) {
+        for(let c=0; c<gridSize; c++) {
+            allCells.push({r,c});
+        }
+    }
+    allCells.sort(() => 0.5 - Math.random());
+
+    let playerGrid = Array(gridSize).fill(0).map(() => Array(gridSize).fill(CELL_STATE.EMPTY));
+    rClues.forEach((clue, r) => { if (clue === 0) { for (let c = 0; c < gridSize; c++) playerGrid[r][c] = CELL_STATE.WATER; } });
+    cClues.forEach((clue, c) => { if (clue === 0) { for (let r = 0; r < gridSize; r++) playerGrid[r][c] = CELL_STATE.WATER; } });
+
+    // Start with a full grid and remove clues
+    let finalPlayerGrid = grid.map(row => row.map(cell => cell === SHIP_ID ? CELL_STATE.SHIP : CELL_STATE.WATER));
+    let removedCells = 0;
+    const totalCells = gridSize * gridSize;
+    const cluesToKeep = fleetConfig.clues[difficulty];
+
+    for(const cell of allCells) {
+        const {r, c} = cell;
+        const originalState = finalPlayerGrid[r][c];
+        if(originalState === CELL_STATE.EMPTY) continue;
+
+        finalPlayerGrid[r][c] = CELL_STATE.EMPTY;
+        
+        const testPuzzle = {
+            playerGrid: JSON.parse(JSON.stringify(finalPlayerGrid)),
+            rowClues: rClues, colClues: cClues, solutionGrid: grid, gridSize: gridSize
+        };
+
+        if(!verifySolvability(testPuzzle)) {
+            // Removing this cell makes it unsolvable, so put it back
+            finalPlayerGrid[r][c] = originalState;
+        } else {
+            removedCells++;
+        }
+    }
+    
+    // Final check for desired clue count (this is an approximation)
+    const finalClueCount = totalCells - removedCells;
+
+    return {
+        gridSize, fleet: fleetConfig.ships, solutionGrid: grid, ships: placedShips, rowClues: rClues, colClues: cClues, playerGrid: finalPlayerGrid
+    };
 }
+
 
 function setUiLoading(isLoading, message = '') {
     document.querySelectorAll('button, input, select').forEach(el => el.disabled = isLoading);
@@ -659,50 +638,31 @@ function getShipSegmentDetails(r, c) {
 
 function updateFleetDisplay() {
     const lists = [ui.fleetList, ui.fleetListFs];
-    lists.forEach(list => {
-        if (list) list.innerHTML = '';
-    });
-    
+    lists.forEach(list => { if (list) list.innerHTML = ''; });
     const shipCounts = {};
     if (!fleetConfig) return;
     fleetConfig.ships.forEach(len => shipCounts[len] = (shipCounts[len] || 0) + 1);
-
     const foundCounts = {};
-    if (ships) { 
+    if (ships) {
         foundShips.forEach(shipId => {
             const ship = ships.find(s => s.id === shipId);
-            if(ship) {
-                foundCounts[ship.length] = (foundCounts[ship.length] || 0) + 1;
-            }
+            if (ship) { foundCounts[ship.length] = (foundCounts[ship.length] || 0) + 1; }
         });
     }
-
     const sortedLengths = Object.keys(shipCounts).map(Number).sort((a, b) => b - a);
-    
     sortedLengths.forEach(length => {
         const total = shipCounts[length];
         const numFound = foundCounts[length] || 0;
-        
         const li = document.createElement('li');
         const icon = document.createElement('div');
         icon.className = 'ship-icon';
-        for (let j = 0; j < length; j++) {
-            icon.appendChild(document.createElement('div'));
-        }
-        
+        for (let j = 0; j < length; j++) { icon.appendChild(document.createElement('div')); }
         const label = document.createElement('span');
         label.textContent = `x ${total}`;
-        
         li.appendChild(icon);
         li.appendChild(label);
-        
-        if (numFound === total) {
-            li.classList.add('found');
-        }
-        
-        lists.forEach(list => {
-            if(list) list.appendChild(li.cloneNode(true));
-        });
+        if (numFound === total) { li.classList.add('found'); }
+        lists.forEach(list => { if (list) list.appendChild(li.cloneNode(true)); });
     });
 }
 
@@ -719,10 +679,10 @@ function revealSolution(isFailedAttempt = false) {
 
 function getSunkShipSegments() {
     const segments = new Map();
-    if(!ships) return segments;
+    if (!ships) return segments;
     for (const ship of ships) {
         if (ship.length === 1) {
-            const {r, c} = ship.segments[0];
+            const { r, c } = ship.segments[0];
             segments.set(`${r},${c}`, { part: 'submarine', rotation: 0 });
             continue;
         }
@@ -731,12 +691,12 @@ function getSunkShipSegments() {
         const firstEndRotation = isVertical ? 270 : 180;
         const lastEndRotation = isVertical ? 90 : 0;
         const middleRotation = isVertical ? 0 : 90;
-        const {r: r1, c: c1} = sortedSegments[0];
+        const { r: r1, c: c1 } = sortedSegments[0];
         segments.set(`${r1},${c1}`, { part: 'end', rotation: firstEndRotation });
-        const {r: rL, c: cL} = sortedSegments[sortedSegments.length - 1];
+        const { r: rL, c: cL } = sortedSegments[sortedSegments.length - 1];
         segments.set(`${rL},${cL}`, { part: 'end', rotation: lastEndRotation });
         for (let i = 1; i < sortedSegments.length - 1; i++) {
-            const {r, c} = sortedSegments[i];
+            const { r, c } = sortedSegments[i];
             segments.set(`${r},${c}`, { part: 'middle', rotation: middleRotation });
         }
     }
@@ -746,24 +706,33 @@ function getSunkShipSegments() {
 function giveHint() {
     ui.puzzleContainer.scrollIntoView({ behavior: 'smooth', block: 'start' });
 
-    const emptyCells = [];
+    const solvedGrid = runSolver(JSON.parse(JSON.stringify(playerGrid)), rowClues, colClues);
+    let hintFound = false;
+
     for (let r = 0; r < gridSize; r++) {
         for (let c = 0; c < gridSize; c++) {
-            if (playerGrid[r][c] === CELL_STATE.EMPTY) {
-                emptyCells.push({r, c});
+            if (playerGrid[r][c] === CELL_STATE.EMPTY && solvedGrid[r][c] !== CELL_STATE.EMPTY) {
+                playerGrid[r][c] = solvedGrid[r][c];
+                hintedCells.push({ r, c });
+                hintFound = true;
+                break;
             }
         }
+        if (hintFound) break;
     }
-    if (emptyCells.length === 0) return;
-    const hintCell = emptyCells[Math.floor(Math.random() * emptyCells.length)];
-    hintedCells.push(hintCell);
-    
-    playerGrid[hintCell.r][hintCell.c] = solutionGrid[hintCell.r][hintCell.c] === SHIP_ID ? CELL_STATE.SHIP : CELL_STATE.WATER;
-    checkForFoundShips();
-    updateGridDisplay();
+
+    if (hintFound) {
+        checkForFoundShips();
+        updateGridDisplay();
+    } else {
+        ui.status.textContent = 'No more logical moves could be found.';
+        setTimeout(() => {
+            ui.status.textContent = `Grid: ${gridSize}x${gridSize} | Difficulty: ${difficulty.charAt(0).toUpperCase() + difficulty.slice(1)}`;
+        }, 2000);
+    }
 }
 
-function formatTime(milliseconds) { const s = Math.floor(milliseconds / 1000); return `${String(Math.floor(s/60)).padStart(2,'0')}:${String(s%60).padStart(2,'0')}`; }
+function formatTime(milliseconds) { const s = Math.floor(milliseconds / 1000); return `${String(Math.floor(s / 60)).padStart(2, '0')}:${String(s % 60).padStart(2, '0')}`; }
 
 function handlePuzzleCompletion(elapsedTime) {
     const bestTime = localStorage.getItem(puzzleConfigKey);
@@ -797,7 +766,7 @@ function toggleFullScreen() {
     }
 }
 
-function setTheme(theme) { 
-    document.body.classList.toggle('dark-mode', theme === 'dark'); 
-    localStorage.setItem('theme', theme); 
+function setTheme(theme) {
+    document.body.classList.toggle('dark-mode', theme === 'dark');
+    localStorage.setItem('theme', theme);
 }

@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Battleships Solo v3.0</title>
+    <title>Battleships Solo v3.14</title>
     <!-- Link to the external CSS file -->
     <link rel="stylesheet" href="battleship-style.css">
 </head>
@@ -51,6 +51,18 @@
                 <h3>Fleet</h3>
                 <ul id="fleet-list-fs"></ul>
             </div>
+            <!-- Completion Modal moved inside game-board -->
+            <div id="completion-modal">
+                <div class="modal-content">
+                    <h2>Congratulations!</h2>
+                    <div id="completion-details">
+                        <p id="your-time"></p>
+                        <p id="best-time"></p>
+                        <p id="new-best-time"></p>
+                    </div>
+                    <button id="play-again-btn">Play Again?</button>
+                </div>
+            </div>
         </div>
 
         <div id="instructions-container">
@@ -89,25 +101,14 @@
         <div class="controls-grid" id="main-controls">
             <button id="generate-btn">New Puzzle</button>
             <button id="finish-btn">End Puzzle</button>
-            <button id="undo-btn">Undo Move</button>
+            <button id="undo-btn">Undo</button>
+            <button id="restart-btn">Restart</button>
             <button id="hint-btn">Hint</button>
-            <button id="check-btn">Check Puzzle</button>
+            <button id="check-btn">Check</button>
             <button id="reveal-btn">Reveal Solution</button>
         </div>
 
         <div id="status-container"><p id="source-status"></p></div>
-    </div>
-
-    <div id="completion-modal">
-        <div class="modal-content">
-            <h2>Congratulations!</h2>
-            <div id="completion-details">
-                <p id="your-time"></p>
-                <p id="best-time"></p>
-                <p id="new-best-time"></p>
-            </div>
-            <button id="play-again-btn">Play Again?</button>
-        </div>
     </div>
     
     <script src="battleship-logic.js"></script>
