@@ -33,6 +33,7 @@ let highlightedLine;
 let foundShips = new Set();
 let hintedCells = [];
 let moveHistory = [];
+let puzzleSolvability = null;
 
 // Game constants
 const FLEET_DEFINITIONS = {
@@ -47,7 +48,8 @@ const SHIP_ID = 2;
  * Main function to generate and display a new puzzle.
  */
 function generatePuzzle() {
-    setUiLoading(true, 'Generating new puzzle...');
+    setUiLoading(true, 'Generating a fair puzzle...');
+    puzzleSolvability = null;
     hideCompletionModal();
     highlightedLine = { type: null, index: null };
     foundShips.clear();
@@ -61,7 +63,10 @@ function generatePuzzle() {
     
     setTimeout(() => {
         try {
+            // This function now guarantees a solvable puzzle
             const puzzleData = generatePuzzleData();
+            puzzleSolvability = true; // We know it's solvable
+
             solutionGrid = puzzleData.solutionGrid;
             ships = puzzleData.ships;
             rowClues = puzzleData.rowClues;
@@ -202,8 +207,13 @@ function updateGridDisplay(isFinished = false, errorCells = [], isFailedAttempt 
                          cell.appendChild(placeholder);
                     }
                 }
-            } else {
-                cell.className = 'grid-cell';
+            } else { // Top-left corner
+                cell.className = 'grid-cell solvability-cell';
+                if (puzzleSolvability === true) {
+                    cell.innerHTML = `<span class="solvable-tick">✓</span>`;
+                } else if (puzzleSolvability === false) {
+                    cell.innerHTML = `<span class="unsolvable-cross">✗</span>`;
+                }
             }
             ui.gridContainer.appendChild(cell);
         }
@@ -378,6 +388,94 @@ window.addEventListener('load', () => {
     setTimeout(generatePuzzle, 0);
 });
 
+// --- Solver and Verification Functions ---
+/**
+ * Runs a logical solver on a grid.
+ */
+function runSolver(grid, rowClues, colClues) {
+    const size = grid.length;
+    let changedInPass = true;
+
+    while (changedInPass) {
+        changedInPass = false;
+
+        const rowShipCount = Array(size).fill(0);
+        const colShipCount = Array(size).fill(0);
+        const rowEmptyCount = Array(size).fill(0);
+        const colEmptyCount = Array(size).fill(0);
+
+        for (let r = 0; r < size; r++) {
+            for (let c = 0; c < size; c++) {
+                if (grid[r][c] === CELL_STATE.SHIP) {
+                    rowShipCount[r]++;
+                    colShipCount[c]++;
+                } else if (grid[r][c] === CELL_STATE.EMPTY) {
+                    rowEmptyCount[r]++;
+                    colEmptyCount[c]++;
+                }
+            }
+        }
+
+        for (let i = 0; i < size; i++) {
+            // Rule: Fill completed rows/cols with WATER
+            if (rowShipCount[i] === rowClues[i]) {
+                for (let c = 0; c < size; c++) if (grid[i][c] === CELL_STATE.EMPTY) { grid[i][c] = CELL_STATE.WATER; changedInPass = true; }
+            }
+            if (colShipCount[i] === colClues[i]) {
+                for (let r = 0; r < size; r++) if (grid[r][i] === CELL_STATE.EMPTY) { grid[r][i] = CELL_STATE.WATER; changedInPass = true; }
+            }
+            
+            // Rule: Fill remaining empty cells with SHIPS if count matches clue
+            if (rowShipCount[i] + rowEmptyCount[i] === rowClues[i]) {
+                for (let c = 0; c < size; c++) if (grid[i][c] === CELL_STATE.EMPTY) { grid[i][c] = CELL_STATE.SHIP; changedInPass = true; }
+            }
+            if (colShipCount[i] + colEmptyCount[i] === colClues[i]) {
+                for (let r = 0; r < size; r++) if (grid[r][i] === CELL_STATE.EMPTY) { grid[r][i] = CELL_STATE.SHIP; changedInPass = true; }
+            }
+        }
+
+        // Rule: Mark water around all SHIP cells (diagonals)
+        for (let r = 0; r < size; r++) {
+            for (let c = 0; c < size; c++) {
+                if (grid[r][c] === CELL_STATE.SHIP) {
+                    for (let dr of [-1, 1]) {
+                        for (let dc of [-1, 1]) {
+                            const nr = r + dr;
+                            const nc = c + dc;
+                            if (nr >= 0 && nr < size && nc >= 0 && nc < size && grid[nr][nc] === CELL_STATE.EMPTY) {
+                                grid[nr][nc] = CELL_STATE.WATER;
+                                changedInPass = true;
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+    return grid;
+}
+
+/**
+ * Verifies if a puzzle is logically solvable.
+ */
+function verifySolvability(puzzle) {
+    // Important: Use a deep copy of the grid so the original is not modified.
+    const solverGrid = JSON.parse(JSON.stringify(puzzle.playerGrid));
+    const solvedGrid = runSolver(solverGrid, puzzle.rowClues, puzzle.colClues);
+
+    for (let r = 0; r < puzzle.gridSize; r++) {
+        for (let c = 0; c < puzzle.gridSize; c++) {
+            const solverCell = solvedGrid[r][c] === CELL_STATE.SHIP ? SHIP_ID : 0;
+            const solutionCell = puzzle.solutionGrid[r][c];
+            if (solverCell !== solutionCell) {
+                return false; // Mismatch found, requires guessing
+            }
+        }
+    }
+    return true; // All cells match, logically solvable
+}
+
+
 // --- Utility and Helper Functions ---
 function undoMove() {
     if (moveHistory.length === 0) return;
@@ -448,68 +546,80 @@ function placeShipsOnGrid() {
 
 function generatePuzzleData() {
     updatePuzzleParameters();
-    let placedShipsResult;
-    let attempts = 0;
-    while (attempts < 50) {
-        placedShipsResult = placeShipsOnGrid();
-        if (placedShipsResult) {
-            break;
-        }
-        attempts++;
-    }
-    if (!placedShipsResult) {
-         throw new Error(`Failed to generate a valid puzzle board after ${attempts} attempts.`);
-    }
-    
-    const { grid, ships: placedShips } = placedShipsResult;
+    let generationAttempts = 0;
 
-    const rClues = Array(gridSize).fill(0);
-    const cClues = Array(gridSize).fill(0);
-    for (let r = 0; r < gridSize; r++) {
-        for (let c = 0; c < gridSize; c++) {
-            if (grid[r][c] === SHIP_ID) {
-                rClues[r]++;
-                cClues[c]++;
+    // Loop until a solvable puzzle is generated
+    while (generationAttempts < 200) { // Safety break after 200 tries
+        generationAttempts++;
+        const placedShipsResult = placeShipsOnGrid();
+        if (!placedShipsResult) continue; // Failed to place ships, try again
+
+        const { grid, ships: placedShips } = placedShipsResult;
+
+        const rClues = Array(gridSize).fill(0);
+        const cClues = Array(gridSize).fill(0);
+        for (let r = 0; r < gridSize; r++) {
+            for (let c = 0; c < gridSize; c++) {
+                if (grid[r][c] === SHIP_ID) {
+                    rClues[r]++;
+                    cClues[c]++;
+                }
             }
         }
-    }
 
-    const tempPlayerGrid = Array(gridSize).fill(0).map(() => Array(gridSize).fill(CELL_STATE.EMPTY));
-    rClues.forEach((clue, r) => {
-        if (clue === 0) {
-            for (let c = 0; c < gridSize; c++) tempPlayerGrid[r][c] = CELL_STATE.WATER;
-        }
-    });
-    cClues.forEach((clue, c) => {
-        if (clue === 0) {
-            for (let r = 0; r < gridSize; r++) tempPlayerGrid[r][c] = CELL_STATE.WATER;
-        }
-    });
-    
-    const initialHints = [];
-    const hintCount = fleetConfig.hints[difficulty];
-    const possibleHintCells = [];
-    for (let r=0; r < gridSize; r++) {
-        for (let c=0; c < gridSize; c++) {
-            if (tempPlayerGrid[r][c] === CELL_STATE.EMPTY) {
-                possibleHintCells.push({r, c});
+        const tempPlayerGrid = Array(gridSize).fill(0).map(() => Array(gridSize).fill(CELL_STATE.EMPTY));
+        rClues.forEach((clue, r) => {
+            if (clue === 0) {
+                for (let c = 0; c < gridSize; c++) tempPlayerGrid[r][c] = CELL_STATE.WATER;
+            }
+        });
+        cClues.forEach((clue, c) => {
+            if (clue === 0) {
+                for (let r = 0; r < gridSize; r++) tempPlayerGrid[r][c] = CELL_STATE.WATER;
+            }
+        });
+
+        const initialHints = [];
+        const hintCount = fleetConfig.hints[difficulty];
+        const possibleHintCells = [];
+        for (let r = 0; r < gridSize; r++) {
+            for (let c = 0; c < gridSize; c++) {
+                if (tempPlayerGrid[r][c] === CELL_STATE.EMPTY) {
+                    possibleHintCells.push({r, c});
+                }
             }
         }
+
+        possibleHintCells.sort(() => 0.5 - Math.random());
+        for(let i=0; i < hintCount && i < possibleHintCells.length; i++) {
+            const {r, c} = possibleHintCells[i];
+            initialHints.push({ r, c, type: grid[r][c] === SHIP_ID ? 'ship' : 'water' });
+        }
+
+        initialHints.forEach(hint => {
+            tempPlayerGrid[hint.r][hint.c] = hint.type === 'ship' ? CELL_STATE.SHIP : CELL_STATE.WATER;
+        });
+        
+        // Verify if the generated puzzle is solvable with the current solver
+        const verificationPuzzle = {
+            playerGrid: tempPlayerGrid,
+            rowClues: rClues,
+            colClues: cClues,
+            solutionGrid: grid,
+            gridSize: gridSize
+        };
+
+        if (verifySolvability(verificationPuzzle)) {
+            // Found a solvable puzzle, return it
+            return {
+                gridSize, fleet: fleetConfig.ships, solutionGrid: grid, ships: placedShips, rowClues: rClues, colClues: cClues, playerGrid: tempPlayerGrid
+            };
+        }
+        // If not solvable, the loop will continue and try again
     }
-
-    possibleHintCells.sort(() => 0.5 - Math.random());
-    for(let i=0; i < hintCount && i < possibleHintCells.length; i++) {
-        const {r, c} = possibleHintCells[i];
-        initialHints.push({ r, c, type: grid[r][c] === SHIP_ID ? 'ship' : 'water' });
-    }
-
-    initialHints.forEach(hint => {
-        tempPlayerGrid[hint.r][hint.c] = hint.type === 'ship' ? CELL_STATE.SHIP : CELL_STATE.WATER;
-    });
-
-    return {
-        gridSize, fleet: fleetConfig.ships, solutionGrid: grid, ships: placedShips, rowClues: rClues, colClues: cClues, playerGrid: tempPlayerGrid
-    };
+    
+    // If the loop finishes without returning, we failed to generate a solvable puzzle
+    throw new Error(`Failed to generate a solvable puzzle. Please try a lower difficulty.`);
 }
 
 function setUiLoading(isLoading, message = '') {
