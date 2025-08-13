@@ -800,7 +800,8 @@ function downloadPdf() {
         rowClues: rowClues,
         colClues: colClues,
         gridSize: gridSize,
-        difficulty: difficulty.charAt(0).toUpperCase() + difficulty.slice(1)
+        difficulty: difficulty.charAt(0).toUpperCase() + difficulty.slice(1),
+        fleet: fleetConfig.ships
     };
     drawPuzzlesOnPage(doc, [puzzleData], 0, { puzzlesPerPage: 1, includePageNumbers: false });
     doc.save(`Battleships-${gridSize}x${gridSize}-${difficulty}.pdf`);
@@ -839,7 +840,8 @@ async function createAndDownloadBook() {
                 rowClues: puzzleData.rowClues,
                 colClues: puzzleData.colClues,
                 gridSize: puzzleData.gridSize,
-                difficulty: difficulty.charAt(0).toUpperCase() + difficulty.slice(1)
+                difficulty: difficulty.charAt(0).toUpperCase() + difficulty.slice(1),
+                fleet: puzzleData.fleet
             });
         }
 
@@ -923,31 +925,92 @@ function drawSingleBattleshipsGrid(doc, puzzleData, startX, startY, gridTotalSiz
 
 function drawPuzzlesOnPage(doc, puzzles, startIndex, options) {
     const { puzzlesPerPage, includePageNumbers } = options;
-    const pageW = doc.internal.pageSize.getWidth(), pageH = doc.internal.pageSize.getHeight(), margin = 20, cornerRadius = 3;
+    const pageW = doc.internal.pageSize.getWidth(), pageH = doc.internal.pageSize.getHeight(), cornerRadius = 3;
     const layouts = {
         1: [{ x: (pageW - 120) / 2, y: 40, size: 120 }],
-        2: [{ x: (pageW - 90) / 2, y: 25, size: 90 }, { x: (pageW - 90) / 2, y: 155, size: 90 }],
+        2: [{ x: (pageW - 75) / 2, y: 30, size: 75 }, { x: (pageW - 75) / 2, y: 155, size: 75 }],
     };
     const layout = layouts[puzzlesPerPage] || layouts[1];
 
     for (let i = 0; i < puzzlesPerPage; i++) {
         const puzzleIndex = startIndex + i;
         if (puzzleIndex >= puzzles.length) break;
+        
         const puzzleData = puzzles[puzzleIndex];
         const { x, y, size } = layout[i];
-        
-        const containerPadding = 3;
-        const totalContainerHeight = size + (containerPadding * 2);
-        const totalContainerWidth = size + (containerPadding * 2);
-        const containerX = x - containerPadding;
-        const containerY = y - containerPadding - 10;
-        const titleText = `Puzzle ${puzzleIndex + 1}`;
+        const padding = 5;
+        const fleetAreaHeight = 35; 
 
-        doc.setFont('helvetica', 'bold').setFontSize(12).text(titleText, containerX + totalContainerWidth / 2, containerY + 6, { align: 'center' });
-        doc.setFont('helvetica', 'normal').setFontSize(9).text(`Difficulty: ${puzzleData.difficulty}`, containerX + totalContainerWidth / 2, containerY + 11, { align: 'center' });
-        doc.setDrawColor(0).setLineWidth(0.6).roundedRect(containerX, containerY, totalContainerWidth, totalContainerHeight + 10, cornerRadius, cornerRadius, 'S');
+        // --- Draw Header ---
+        const titleText = `Puzzle ${puzzleIndex + 1}`;
+        const headerCenterX = x + size / 2;
+        const headerY = y - 15;
         
+        doc.setFont('helvetica', 'bold').setFontSize(12).text(titleText, headerCenterX, headerY, { align: 'center' });
+        doc.setFont('helvetica', 'normal').setFontSize(9).text(`Difficulty: ${puzzleData.difficulty}`, headerCenterX, headerY + 5, { align: 'center' });
+        
+        // --- Calculate Border ---
+        const borderX = x - padding;
+        const borderY = y - padding;
+        const borderWidth = size + (padding * 2);
+        const borderHeight = size + padding + fleetAreaHeight;
+        
+        // --- Draw Grid ---
         drawSingleBattleshipsGrid(doc, puzzleData, x, y, size, false);
+
+        // --- Draw Fleet Key Inside Border ---
+        if (puzzleData.fleet) {
+            const shipCounts = {};
+            puzzleData.fleet.forEach(len => shipCounts[len] = (shipCounts[len] || 0) + 1);
+            const sortedLengths = Object.keys(shipCounts).map(Number).sort((a, b) => b - a);
+            
+            const fleetCenterX = x + size / 2;
+            let currentY = y + size + 8; 
+
+            doc.setFont('helvetica', 'bold').setFontSize(10).setTextColor(0,0,0);
+            doc.text('Fleet', fleetCenterX, currentY, { align: 'center' });
+            currentY += 8;
+
+            // --- Calculate layout for the left-aligned block ---
+            doc.setFont('helvetica', 'normal').setFontSize(9);
+            const iconSegmentSize = 3.5;
+            const iconGap = 0.7;
+            const textGap = 4;
+
+            let maxLineWidth = 0;
+            for(const length of sortedLengths) {
+                const count = shipCounts[length];
+                const text = `x ${count}`;
+                const iconWidth = length * iconSegmentSize + (length - 1) * iconGap;
+                const textWidth = doc.getTextWidth(text);
+                const currentLineWidth = iconWidth + textGap + textWidth;
+                if(currentLineWidth > maxLineWidth) {
+                    maxLineWidth = currentLineWidth;
+                }
+            }
+            
+            const blockStartX = fleetCenterX - maxLineWidth / 2;
+
+            for(const length of sortedLengths) {
+                doc.setFillColor(0, 0, 0); // Use solid black for all ship icons
+                const count = shipCounts[length];
+                const text = `x ${count}`;
+                const iconWidth = length * iconSegmentSize + (length - 1) * iconGap;
+
+                // Draw Icons (left-aligned in the block)
+                for (let j = 0; j < length; j++) {
+                    doc.rect(blockStartX + j * (iconSegmentSize + iconGap), currentY - (iconSegmentSize/2), iconSegmentSize, iconSegmentSize, 'F');
+                }
+                
+                // Draw Text (immediately after icons)
+                doc.text(text, blockStartX + iconWidth + textGap, currentY, { baseline: 'middle' });
+
+                currentY += iconSegmentSize + 3;
+            }
+        }
+        
+        // --- Draw Border last to be on top ---
+        doc.setDrawColor(0).setLineWidth(0.6).roundedRect(borderX, borderY, borderWidth, borderHeight, cornerRadius, cornerRadius, 'S');
     }
 
     if (includePageNumbers) doc.setFont('helvetica', 'normal').setFontSize(8).text(String(Math.floor(startIndex / puzzlesPerPage) + 1), pageW / 2, pageH - 10, { align: 'center' });
