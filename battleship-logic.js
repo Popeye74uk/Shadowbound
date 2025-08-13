@@ -73,7 +73,7 @@ function generatePuzzle() {
             hintedCells = [];
             moveHistory = [];
             selectedCell = { r: 0, c: 0 };
-            updateUndoButton();
+            
             ui.hintBtn.disabled = false;
             ui.revealBtn.disabled = false;
             ui.finishBtn.disabled = false;
@@ -89,8 +89,10 @@ function generatePuzzle() {
             puzzleConfigKey = `battleship-${gridSize}-${difficulty}`;
             ui.status.textContent = `Grid: ${gridSize}x${gridSize} | Difficulty: ${difficulty.charAt(0).toUpperCase() + difficulty.slice(1)}`;
 
+            applyAutoWaterLogic();
             checkForFoundShips();
             updateGridDisplay();
+            updateUndoButton(); // Set initial state of undo button
             setUiLoading(false);
         } catch (error) {
             ui.status.textContent = `Error: ${error.message}. Please try again.`;
@@ -144,22 +146,6 @@ function updateGridDisplay(isFinished = false, errorCells = [], isFailedAttempt 
         }
     }
 
-    const autoFilledWaterCells = new Set();
-    for (let r = 0; r < gridSize; r++) {
-        if (playerRowCounts[r] === rowClues[r] && rowClues[r] > 0) {
-            for (let c = 0; c < gridSize; c++) {
-                if (playerGrid[r][c] === CELL_STATE.EMPTY) autoFilledWaterCells.add(`${r},${c}`);
-            }
-        }
-    }
-    for (let c = 0; c < gridSize; c++) {
-        if (playerColCounts[c] === colClues[c] && colClues[c] > 0) {
-            for (let r = 0; r < gridSize; r++) {
-                if (playerGrid[r][c] === CELL_STATE.EMPTY) autoFilledWaterCells.add(`${r},${c}`);
-            }
-        }
-    }
-
     for (let r = 0; r < fullGridSize; r++) {
         for (let c = 0; c < fullGridSize; c++) {
             const cell = document.createElement('div');
@@ -191,9 +177,8 @@ function updateGridDisplay(isFinished = false, errorCells = [], isFailedAttempt 
                 if (hintedCells.some(h => h.r === gridR && h.c === gridC)) cell.classList.add('hint-cell');
 
                 const state = playerGrid[gridR][gridC];
-                const isAutoFilled = autoFilledWaterCells.has(`${r},${c}`);
 
-                if (state === CELL_STATE.WATER || isAutoFilled) {
+                if (state === CELL_STATE.WATER) {
                     cell.classList.add('water');
                 } else if (state === CELL_STATE.SHIP) {
                     cell.classList.add('ship');
@@ -244,21 +229,60 @@ function handleGameCellClick(cell) {
     if (startTime === null) return;
     const r = parseInt(cell.dataset.r);
     const c = parseInt(cell.dataset.c);
+    
+    // Save state BEFORE modification for undo
+    moveHistory.push(JSON.parse(JSON.stringify(playerGrid)));
+    if (moveHistory.length > 10) moveHistory.shift();
+    
     selectedCell.r = r;
     selectedCell.c = c;
     let currentState = playerGrid[r][c];
     let nextState = (currentState + 1) % 3;
     if (ui.mistakeModeCheckbox.checked && nextState === CELL_STATE.SHIP && solutionGrid[r][c] !== SHIP_ID) {
         cell.classList.add('error-flash');
+        moveHistory.pop(); // Remove the saved state since the move was invalid
         return;
     }
+
     cell.classList.remove('error-flash');
-    moveHistory.push({ r, c, previousState: currentState });
-    if (moveHistory.length > 10) moveHistory.shift();
-    updateUndoButton();
     playerGrid[r][c] = nextState;
+    
+    applyAutoWaterLogic();
     checkForFoundShips();
     updateGridDisplay();
+    updateUndoButton();
+}
+
+function applyAutoWaterLogic() {
+    const playerRowCounts = Array(gridSize).fill(0);
+    const playerColCounts = Array(gridSize).fill(0);
+    for (let r = 0; r < gridSize; r++) {
+        for (let c = 0; c < gridSize; c++) {
+            if (playerGrid[r][c] === CELL_STATE.SHIP) {
+                playerRowCounts[r]++;
+                playerColCounts[c]++;
+            }
+        }
+    }
+
+    for (let r = 0; r < gridSize; r++) {
+        if (playerRowCounts[r] === rowClues[r]) {
+            for (let c = 0; c < gridSize; c++) {
+                if (playerGrid[r][c] === CELL_STATE.EMPTY) {
+                    playerGrid[r][c] = CELL_STATE.WATER;
+                }
+            }
+        }
+    }
+    for (let c = 0; c < gridSize; c++) {
+        if (playerColCounts[c] === colClues[c]) {
+            for (let r = 0; r < gridSize; r++) {
+                if (playerGrid[r][c] === CELL_STATE.EMPTY) {
+                    playerGrid[r][c] = CELL_STATE.WATER;
+                }
+            }
+        }
+    }
 }
 
 function handleClueCellClick(cell) {
@@ -297,12 +321,7 @@ function checkSolution() {
         updateGridDisplay(true, [], false);
         updateFleetDisplay();
     } else {
-        startTime = null;
-        ui.finishBtn.disabled = true;
-        ui.hintBtn.disabled = true;
-        playerGrid = solutionGrid.map(row => row.map(cell => cell === SHIP_ID ? CELL_STATE.SHIP : CELL_STATE.WATER));
-        updateGridDisplay(true, errorCells, false);
-        checkForFoundShips(true);
+        revealSolution(true);
     }
 }
 
@@ -484,8 +503,7 @@ function restartPuzzle() {
 
 function undoMove() {
     if (moveHistory.length === 0) return;
-    const lastMove = moveHistory.pop();
-    playerGrid[lastMove.r][lastMove.c] = lastMove.previousState;
+    playerGrid = moveHistory.pop();
     updateUndoButton();
     checkForFoundShips();
     updateGridDisplay();
@@ -679,7 +697,7 @@ function revealSolution(isFailedAttempt = false) {
     if (!solutionGrid) return;
     startTime = null;
     playerGrid = solutionGrid.map(row => row.map(cell => cell === SHIP_ID ? CELL_STATE.SHIP : CELL_STATE.WATER));
-    checkForFoundShips(true);
+    checkForFoundShips();
     updateGridDisplay(true, [], isFailedAttempt);
     ui.hintBtn.disabled = true;
     ui.finishBtn.disabled = true;
@@ -689,21 +707,31 @@ function revealSolution(isFailedAttempt = false) {
 function getSunkShipSegments() {
     const segments = new Map();
     if (!ships) return segments;
+
     for (const ship of ships) {
         if (ship.length === 1) {
             const { r, c } = ship.segments[0];
             segments.set(`${r},${c}`, { part: 'submarine', rotation: 0 });
             continue;
         }
+
         const isVertical = ship.segments.length > 1 && ship.segments[0].c === ship.segments[1].c;
         const sortedSegments = ship.segments.sort((a, b) => isVertical ? a.r - b.r : a.c - b.c);
-        const firstEndRotation = isVertical ? 270 : 180;
-        const lastEndRotation = isVertical ? 90 : 0;
-        const middleRotation = isVertical ? 0 : 90;
+
+        // Define rotations. Default end piece SVG points right (0 deg).
+        const firstEndRotation = isVertical ? 270 : 180; // Pointing UP or LEFT
+        const lastEndRotation = isVertical ? 90 : 0;    // Pointing DOWN or RIGHT
+        const middleRotation = isVertical ? 90 : 0;   // Rotated for vertical or horizontal alignment
+
+        // Set the first segment (top or left end)
         const { r: r1, c: c1 } = sortedSegments[0];
         segments.set(`${r1},${c1}`, { part: 'end', rotation: firstEndRotation });
+
+        // Set the last segment (bottom or right end)
         const { r: rL, c: cL } = sortedSegments[sortedSegments.length - 1];
         segments.set(`${rL},${cL}`, { part: 'end', rotation: lastEndRotation });
+
+        // Set all middle segments
         for (let i = 1; i < sortedSegments.length - 1; i++) {
             const { r, c } = sortedSegments[i];
             segments.set(`${r},${c}`, { part: 'middle', rotation: middleRotation });
@@ -712,8 +740,13 @@ function getSunkShipSegments() {
     return segments;
 }
 
+
 function giveHint() {
     ui.puzzleContainer.scrollIntoView({ behavior: 'smooth', block: 'start' });
+
+    // Save state BEFORE hint for undo
+    moveHistory.push(JSON.parse(JSON.stringify(playerGrid)));
+    if (moveHistory.length > 10) moveHistory.shift();
 
     const solvedGrid = runSolver(JSON.parse(JSON.stringify(playerGrid)), rowClues, colClues);
     const possibleHints = [];
@@ -730,9 +763,13 @@ function giveHint() {
         const hint = possibleHints[Math.floor(Math.random() * possibleHints.length)];
         playerGrid[hint.r][hint.c] = hint.state;
         hintedCells.push({ r: hint.r, c: hint.c });
+        
+        applyAutoWaterLogic();
         checkForFoundShips();
         updateGridDisplay();
+        updateUndoButton();
     } else {
+        moveHistory.pop(); // No hint was given, so remove the saved state
         ui.status.textContent = 'No more logical moves could be found.';
         setTimeout(() => {
             ui.status.textContent = `Grid: ${gridSize}x${gridSize} | Difficulty: ${difficulty.charAt(0).toUpperCase() + difficulty.slice(1)}`;
@@ -948,69 +985,103 @@ function drawPuzzlesOnPage(doc, puzzles, startIndex, options) {
         // --- Draw Header ---
         const titleText = `Puzzle ${puzzleIndex + 1}`;
         const headerCenterX = x + size / 2;
-        const headerY = y - 12; // Balanced gap
+        const headerY = y - 12;
         
         doc.setFont('helvetica', 'bold').setFontSize(12).text(titleText, headerCenterX, headerY, { align: 'center' });
         doc.setFont('helvetica', 'normal').setFontSize(9).text(`Difficulty: ${puzzleData.difficulty}`, headerCenterX, headerY + 5, { align: 'center' });
         
-        // --- Calculate Border ---
-        const borderX = x - padding;
-        const borderY = y - padding;
-        const borderWidth = size + (padding * 2);
-        const borderHeight = size + padding + fleetAreaHeight;
-        
         // --- Draw Grid ---
         drawSingleBattleshipsGrid(doc, puzzleData, x, y, size, false);
 
-        // --- Draw Fleet Key Inside Border ---
+        // --- Draw Fleet Key ---
         if (puzzleData.fleet) {
             const shipCounts = {};
             puzzleData.fleet.forEach(len => shipCounts[len] = (shipCounts[len] || 0) + 1);
             const sortedLengths = Object.keys(shipCounts).map(Number).sort((a, b) => b - a);
             
             const fleetCenterX = x + size / 2;
-            let currentY = y + size + 8; 
+            let fleetStartY = y + size + 8; 
 
             doc.setFont('helvetica', 'bold').setFontSize(10).setTextColor(0,0,0);
-            doc.text('Fleet', fleetCenterX, currentY, { align: 'center' });
-            currentY += 8;
+            doc.text('Fleet', fleetCenterX, fleetStartY, { align: 'center' });
+            fleetStartY += 8;
 
             doc.setFont('helvetica', 'normal').setFontSize(9);
             const iconSegmentSize = 3.5;
             const iconGap = 0.7;
             const textGap = 4;
-
-            let maxLineWidth = 0;
-            for(const length of sortedLengths) {
-                const count = shipCounts[length];
-                const text = `x ${count}`;
-                const iconWidth = length * iconSegmentSize + (length - 1) * iconGap;
-                const textWidth = doc.getTextWidth(text);
-                const currentLineWidth = iconWidth + textGap + textWidth;
-                if(currentLineWidth > maxLineWidth) {
-                    maxLineWidth = currentLineWidth;
-                }
-            }
+            const lineHeight = iconSegmentSize + 3.5;
             
-            const blockStartX = fleetCenterX - maxLineWidth / 2;
+            const availableHeight = fleetAreaHeight - 16;
+            const requiredHeight = sortedLengths.length * lineHeight;
 
-            for(const length of sortedLengths) {
-                doc.setFillColor(0, 0, 0);
-                const count = shipCounts[length];
-                const text = `x ${count}`;
-                const iconWidth = length * iconSegmentSize + (length - 1) * iconGap;
-
-                for (let j = 0; j < length; j++) {
-                    doc.rect(blockStartX + j * (iconSegmentSize + iconGap), currentY - (iconSegmentSize/2), iconSegmentSize, iconSegmentSize, 'F');
+            const getColumnWidth = (items) => {
+                let maxWidth = 0;
+                if (!items) return 0;
+                for (const length of items) {
+                    const text = `x ${shipCounts[length]}`;
+                    const iconWidth = length * iconSegmentSize + (length - 1) * iconGap;
+                    maxWidth = Math.max(maxWidth, iconWidth + textGap + doc.getTextWidth(text));
                 }
-                
-                doc.text(text, blockStartX + iconWidth + textGap, currentY, { baseline: 'middle' });
+                return maxWidth;
+            };
 
-                currentY += iconSegmentSize + 3;
+            const drawColumn = (items, startX, startY, colWidth) => {
+                let currentY = startY;
+                for(const length of items) {
+                    const text = `x ${shipCounts[length]}`;
+                    const iconWidth = length * iconSegmentSize + (length - 1) * iconGap;
+                    const itemWidth = iconWidth + textGap + doc.getTextWidth(text);
+                    const itemStartX = startX + (colWidth - itemWidth) / 2;
+
+                    doc.setFillColor(0, 0, 0);
+                    for (let j = 0; j < length; j++) {
+                        doc.rect(itemStartX + j * (iconSegmentSize + iconGap), currentY - (iconSegmentSize/2), iconSegmentSize, iconSegmentSize, 'F');
+                    }
+                    doc.text(text, itemStartX + iconWidth + textGap, currentY, { baseline: 'middle' });
+                    currentY += lineHeight;
+                }
+            };
+            
+            if (requiredHeight > availableHeight && sortedLengths.length > 1) {
+                // Two-column layout
+                const splitPoint = Math.ceil(sortedLengths.length / 2);
+                const col1Items = sortedLengths.slice(0, splitPoint);
+                const col2Items = sortedLengths.slice(splitPoint);
+                
+                const col1Width = getColumnWidth(col1Items);
+                const col2Width = getColumnWidth(col2Items);
+                const colGap = 5;
+                const totalWidth = col1Width + col2Width + colGap;
+
+                const blockStartX = fleetCenterX - totalWidth / 2;
+                drawColumn(col1Items, blockStartX, fleetStartY, col1Width);
+                drawColumn(col2Items, blockStartX + col1Width + colGap, fleetStartY, col2Width);
+            } else {
+                // Original single-column layout
+                const colWidth = getColumnWidth(sortedLengths);
+                const startX = fleetCenterX - colWidth / 2;
+                let currentY = fleetStartY;
+                for(const length of sortedLengths) {
+                    doc.setFillColor(0, 0, 0);
+                    const count = shipCounts[length];
+                    const text = `x ${count}`;
+                    const iconWidth = length * iconSegmentSize + (length - 1) * iconGap;
+
+                    for (let j = 0; j < length; j++) {
+                        doc.rect(startX + j * (iconSegmentSize + iconGap), currentY - (iconSegmentSize/2), iconSegmentSize, iconSegmentSize, 'F');
+                    }
+                    doc.text(text, startX + iconWidth + textGap, currentY, { baseline: 'middle' });
+                    currentY += lineHeight;
+                }
             }
         }
         
         // --- Draw Border last to be on top ---
+        const borderX = x - padding;
+        const borderY = y - padding;
+        const borderWidth = size + (padding * 2);
+        const borderHeight = size + padding + fleetAreaHeight;
         doc.setDrawColor(0).setLineWidth(0.6).roundedRect(borderX, borderY, borderWidth, borderHeight, cornerRadius, cornerRadius, 'S');
     }
 
